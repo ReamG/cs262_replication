@@ -6,6 +6,7 @@ class Account:
     def __init__(self, user_id, is_logged_in):
         self.user_id = user_id
         self.is_logged_in = is_logged_in
+        self.msg_log = []
 
 class Message:
     """

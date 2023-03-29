@@ -12,6 +12,7 @@ OP_TO_CODE_MAP = {
     "get": "4",
     "send": "5",
     "list": "6",
+    "logs": "7",
 }
 
 CODE_TO_OP_MAP = {
@@ -21,6 +22,7 @@ CODE_TO_OP_MAP = {
     "4": "get",
     "5": "send",
     "6": "list",
+    "7": "logs",
 }
 
 def pad_to_length(s, length):
@@ -144,6 +146,11 @@ def unmarshal_request(data: bytes):
     elif op == "delete":
         return Request(user_id), op
     elif op == "list":
+        wildcard = unpad(data[10:18])
+        page = unpad(data[18:26])
+        page_num = int(page)
+        return ListRequest(user_id, wildcard, page_num), op
+    elif op == "logs":
         wildcard = unpad(data[10:18])
         page = unpad(data[18:26])
         page_num = int(page)

@@ -115,8 +115,17 @@ class Server:
         message = schema.Message(author_id=request.user_id, recipient_id=request.recipient_id, text=request.text, success=True)
         with self.msgs_lock:
             self.msgs_cache[request.recipient_id].append(message)
+            self.users[request.recipient_id].msg_log.insert(0, message)
         self.user_events[request.recipient_id].set()
         return schema.Response(user_id=request.user_id, success=True, error_message="")
+    
+    def handle_logs(self, request):
+        """
+        Returns a users message logs
+        """
+        print(self.users[request.recipient_id].msg_log)
+
+        return None
     
     def handle_request_with_op(self, request, op):
         """
@@ -136,6 +145,8 @@ class Server:
             return self.handle_send(request)
         if op == "health":
             return schema.Response(user_id=request.user_id, success=True, error_message="")
+        if op == "logs":
+            return self.handle_logs(request)
         return None
     
     def handle_connection(self, conn, addr):
