@@ -236,7 +236,7 @@ class Client:
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
             return
-        utils.print_info("{} users on page {} matching '{}'".format(len(resp.accounts), page_int, wildcard))
+        utils.print_info("{} messages on page {} matching '{}'".format(len(resp.accounts), page_int, wildcard))
         for user_id in resp.accounts:
             print(user_id)
         
@@ -284,8 +284,10 @@ class Client:
     
     def is_in_good_health(self):
         if not self.isocket:
+            print("hii1")
             return False
         if self.is_logged_in() and not self.wsocket:
+            print("hii")
             return False
         return True
 

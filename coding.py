@@ -47,6 +47,14 @@ def prep_accounts(accounts):
     as_strings = [account.user_id for account in accounts]
     return ",".join(as_strings)
 
+def prep_messages(messages):
+    """
+    Turns a list of messages into a string
+    """
+    as_strings = [message.author_id + ": " + message.text for message in messages]
+    return ",".join(as_strings)
+
+
 def post_accounts(str):
     """
     Turns a string of accounts into a list
@@ -98,6 +106,18 @@ def marshal_list_request(req: ListRequest):
         pad_to_length(str(req.page), 8),
     ).encode()
 
+def marshal_logs_request(req: ListRequest):
+    """
+    Marshals a list Request into a byte string
+    """
+    return "{}{}{}{}{}".format(
+        VERSION,
+        pad_to_length(req.user_id, 8),
+        OP_TO_CODE_MAP["logs"],
+        pad_to_length(req.wildcard, 8),
+        pad_to_length(str(req.page), 8),
+    ).encode()
+    
 def marshal_subscribe_request(req: Request):
     """
     Marshals a subscribe Request into a byte string
@@ -199,6 +219,19 @@ def marshal_list_response(resp: ListResponse):
         1 if resp.success else 0,
         pad_to_length(resp.error_message, ERROR_MESSAGE_LENGTH),
         prep_accounts(resp.accounts)
+    ).encode()
+
+def marshal_logs_response(resp: ListResponse):
+    """
+    Marshals a ListResponse into a byte string
+    """
+    return "{}{}{}{}{}{}".format(
+        VERSION,
+        pad_to_length(resp.user_id, 8),
+        RESP_TO_CODE_MAP[resp.type],
+        1 if resp.success else 0,
+        pad_to_length(resp.error_message, ERROR_MESSAGE_LENGTH),
+        prep_messages(resp.accounts)
     ).encode()
 
 def marshal_message_response(msg: Message):

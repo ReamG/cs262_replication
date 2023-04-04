@@ -123,9 +123,11 @@ class Server:
         """
         Returns a users message logs
         """
-        print(self.users[request.recipient_id].msg_log)
-
-        return None
+        with self.user_lock:
+            msg_hist = self.users[request.user_id].msg_log
+            satisfying = filter(lambda msg : request.wildcard in msg.author_id, msg_hist)
+            limited_to_page = list(satisfying)[request.page * self.ACCOUNT_PAGE_SIZE : (request.page + 1) * self.ACCOUNT_PAGE_SIZE]
+            return schema.ListResponse(user_id=request.user_id, success=True, error_message="", accounts=limited_to_page)
     
     def handle_request_with_op(self, request, op):
         """
@@ -173,6 +175,8 @@ class Server:
                 # Send back using the right encoding
                 if op == "list":
                     data = coding.marshal_list_response(resp)
+                if op == "logs":
+                    data = coding.marshal_logs_response(resp)
                 elif op == "get":
                     data = coding.marshal_message_response(resp)
                 else:
