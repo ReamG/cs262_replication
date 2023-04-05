@@ -61,3 +61,7 @@ class ListResponse(Response):
         super().__init__(user_id, success, error_message)
         self.accounts = accounts
         self.type = "list"
+
+class DeleteRequest(Request):
+    def __init__(self, user_id):
+        super().__init__(user_id)

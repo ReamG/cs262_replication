@@ -38,32 +38,29 @@ class Server:
         self.user_events = {}
         self.alive = True
 
-    def start(self):
-        """
-        Starts the machine
-        """
-        self.conman.initialize()
+        if os.path.isfile(f"logs/{self.host}_{self.port}_log.out"):
+            with open(f"logs/{self.host}_{self.port}_log.out", "r") as file:
+                for l in file.readlines():
+                    line = l.split("||")
 
-        # if os.path.isfile(f"logs/{self.host}_{self.port}_log.out"):
-        #     with open(f"logs/{self.host}_{self.port}_log.out", "r") as file:
-        #         for l in file.readlines():
-        #             line = l.split("||")
-
-        #             if line[0] == "account":
-        #                 account = schema.Account(user_id=line[1], is_logged_in=False)
-        #                 self.users[account.user_id] = account
-        #             elif line[0] == "message":
-        #                 message = schema.Message(author_id=line[1], recipient_id=line[2], text=line[3], success=(line[4][:-2] == "True"))
-        #                 self.users[message.recipient_id].msg_log.append(message)
+                    if line[0] == "account":
+                        account = schema.Account(
+                            user_id=line[1], is_logged_in=False)
+                        self.users[account.user_id] = account
+                    elif line[0] == "message":
+                        message = schema.Message(
+                            author_id=line[1], recipient_id=line[2], text=line[3], success=(line[4][:-1] == "True"))
+                        self.users[message.recipient_id].msg_log.append(
+                            message)
+                    elif line[0] == "delete":
+                        del self.users[line[1][:-1]]
 
     def update_log(self, item):
         """
         Add items to server log file
         """
-        try:
+        if not os.path.exists("logs"):
             os.mkdir("logs")
-        except:
-            pass
         self.fout = open(f"logs/{self.host}_{self.port}_log.out", "a")
         if type(item) == schema.Account:
             self.fout.write(
@@ -71,6 +68,9 @@ class Server:
         elif type(item) == schema.Message:
             self.fout.write(
                 f"message||{item.author_id}||{item.recipient_id}||{item.text}||{item.success}\n")
+        elif type(item) == schema.DeleteRequest:
+            print("delete request")
+            self.fout.write(f"delete||{item.user_id}\n")
         else:
             utils.print_error("Error: Invalid log item")
 
@@ -118,6 +118,7 @@ class Server:
         with self.user_lock:
             if not request.user_id in self.users:
                 return schema.Response(user_id=request.user_id, success=False, error_message="User does not exist")
+            # self.update_log(schema.DeleteRequest(user_id=request.user_id))
             del self.users[request.user_id]
             del self.msgs_cache[request.user_id]
             del self.user_events[request.user_id]
@@ -268,7 +269,7 @@ if __name__ == "__main__":
     try:
         executor = futures.ThreadPoolExecutor()
         name = sys.argv[1]
-        server = Server(host=HOST, port=PORT, executor=executor)
+        server = Server(name=name, executor=executor)
         server.start()
     except KeyboardInterrupt:
         server.alive = False

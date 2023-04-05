@@ -4,10 +4,10 @@ import threading
 from typing import Mapping
 from queue import Queue
 from threading import Thread
-import consts
-import errors
-from schema import Machine
-from schema import Message
+import connections.consts as consts
+import connections.errors as errors
+from connections.schema import Machine
+from connections.schema import Message
 from utils import print_error
 
 
@@ -158,7 +158,7 @@ class ConnectionManager:
         """
         Sends a message to the machine with the given name
         """
-        if to not in self.socket_map:
+        if to_machine not in self.socket_map:
             print_error(f"Machine {to_machine} is not connected")
             return
         msg = Message(self.identity.name, clock)

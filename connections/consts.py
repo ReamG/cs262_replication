@@ -1,4 +1,4 @@
-from schema import Machine
+from connections.schema import Machine
 
 # Create the three identities that the machines can assume
 MACHINE_A = Machine(
