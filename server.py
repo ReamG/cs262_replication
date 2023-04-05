@@ -4,6 +4,7 @@ import socket
 from concurrent import futures
 
 import schema
+import os
 import coding
 import utils
 import time
@@ -32,6 +33,40 @@ class Server:
         self.user_events = {}
         self.ACCOUNT_PAGE_SIZE = 4
         self.alive = True
+        
+        # if os.path.isfile(f"logs/{self.host}_{self.port}_log.out"):
+        #     with open(f"logs/{self.host}_{self.port}_log.out", "r") as file:
+        #         for l in file.readlines():
+        #             line = l.split("||")
+
+        #             if line[0] == "account":
+        #                 account = schema.Account(user_id=line[1], is_logged_in=False)
+        #                 self.users[account.user_id] = account
+        #             elif line[0] == "message":
+        #                 message = schema.Message(author_id=line[1], recipient_id=line[2], text=line[3], success=(line[4][:-2] == "True"))
+        #                 self.users[message.recipient_id].msg_log.append(message)
+
+            
+    
+    def update_log(self, item):
+        """
+        Add items to server log file
+        """
+        # ******************** HOW TO HANDLE FIELDS THAT HAVE || ?????**********************************************************
+        try:
+            os.mkdir("logs")
+        except:
+            pass
+        self.fout = open(f"logs/{self.host}_{self.port}_log.out", "a")
+        if type(item) == schema.Account:
+            self.fout.write(f"account||{item.user_id}||{item.is_logged_in}||{item.msg_log}\n")
+        elif type(item) == schema.Message:
+            self.fout.write(f"message||{item.author_id}||{item.recipient_id}||{item.text}||{item.success}\n")
+        else:
+            utils.print_error("Error: Invalid log item")
+        
+        self.fout.close()
+
 
     
     def handle_create(self, request):
@@ -43,6 +78,7 @@ class Server:
             if request.user_id in self.users:
                 return schema.Response(user_id=request.user_id, success=False, error_message="User already exists")
             new_account = schema.Account(user_id=request.user_id, is_logged_in=True)
+            self.update_log(new_account)
             self.users[new_account.user_id] = new_account
             self.msgs_cache[new_account.user_id] = []
             self.user_events[new_account.user_id] = Event()
@@ -116,6 +152,7 @@ class Server:
         with self.msgs_lock:
             self.msgs_cache[request.recipient_id].append(message)
             self.users[request.recipient_id].msg_log.insert(0, message)
+            self.update_log(message)
         self.user_events[request.recipient_id].set()
         return schema.Response(user_id=request.user_id, success=True, error_message="")
     
