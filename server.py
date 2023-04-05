@@ -25,6 +25,7 @@ class Server:
         """
         Initialize the server
         """
+        pdb.set_trace()
         if name not in consts.MACHINE_MAP:
             raise ValueError("Invalid machine name")
         self.identity = consts.MACHINE_MAP[name]
