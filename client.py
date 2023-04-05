@@ -10,7 +10,8 @@ from concurrent import futures
 import pdb
 import time
 
-HOST = input("Enter Server Host Address: ")  # The server's hostname or IP address
+# HOST = input("Enter Server Host Address: ")  # The server's hostname or IP address
+HOST = "127.0.0.1"  # The server's hostname or IP address
 PORT = 65432  # The port used by the server
 
 class Client:
@@ -91,6 +92,9 @@ class Client:
             return
         if "," in username:
             utils.print_error("Error: username cannot contain commas")
+            return
+        if "||" in username:
+            utils.print_error("Error: username cannot contain \"||\"")
             return
         message = coding.marshal_create_request(schema.Request(username))
         self.isocket.sendall(message)
@@ -200,6 +204,12 @@ class Client:
         text = input("> What would you like to say?\n")
         if len(text) > 280:
             utils.print_error("Error: Message cannot be longer than 280 characters")
+            return
+        if "||" in text:
+            utils.print_error("Error: text cannot contain \"||\"")
+            return
+        if "@@" in text:
+            utils.print_error("Error: text cannot contain \"@@\"")
             return
         message = coding.marshal_send_request(schema.SendRequest(user_id=self.user_id, recipient_id=recipient, text=text))
         self.isocket.sendall(message)
