@@ -1,0 +1,11 @@
+account||mark||True||[]
+account||todd||True||[]
+chat||todd||mark||hello||True
+chat||mark||todd||hello?||True
+chat||mark||todd||hello||True
+chat||mark||todd||hello||True
+chat||mark||todd||hello||True
+chat||mark||todd||hey||True
+chat||mark||todd||test||True
+chat||mark||todd||hello||True
+chat||mark||todd||hello||True

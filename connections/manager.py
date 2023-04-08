@@ -1,12 +1,13 @@
 import time
 import socket
 import threading
+import pdb
 from typing import Mapping
 from queue import Queue
 from threading import Thread
 import connections.consts as consts
 import connections.errors as errors
-from connections.schema import Machine, Message, Request
+from connections.schema import Machine, Message, Request, Response
 from utils import print_error
 
 
@@ -19,13 +20,15 @@ class ConnectionManager:
 
     def __init__(self, identity: Machine):
         self.identity = identity
-        self.internal_sockets: Mapping[str, any] = {}
-        self.client_sockets = []
+        self.is_primary = False  # Is this the primary?
+        self.living_siblings = consts.get_other_machines(identity.name)
         self.alive = True
         self.internal_lock = threading.Lock()
-        self.internal_msgs: "Queue[Message]" = Queue()
+        self.internal_sockets: Mapping[str, any] = {}
+        self.internal_requests: "Queue[Request]" = Queue()
         self.client_lock = threading.Lock()
-        self.client_requests: "Queue[Request]" = Queue()
+        self.client_sockets: Mapping[str, any] = {}
+        self.client_requests: "Queue[(str, Request)]" = Queue()
 
     def initialize(self):
         """
@@ -33,21 +36,31 @@ class ConnectionManager:
         """
         # First it should establish connections to all other internal machines
         listen_thread = Thread(target=self.listen_internally)
-        connect_thread = Thread(target=self.handle_connections)
+        connect_thread = Thread(target=self.handle_internal_connections)
         listen_thread.start()
         connect_thread.start()
         listen_thread.join()
         connect_thread.join()
+
         # At this point we assume that self.internal_sockets is populated
         # with sockets to all other internal machines
         for (name, sock) in self.internal_sockets.items():
             # Be sure to consume with the internal flag set to True
             consumer_thread = Thread(
-                target=self.consume,
-                args=(sock, True)
+                target=self.consume_internally,
+                args=(sock,)
             )
             consumer_thread.start()
+
+        # Once all the servers are up we start doing health checks
+        health_listen_thread = Thread(target=self.listen_health)
+        health_listen_thread.start()
+        health_probe_thread = Thread(target=self.probe_health)
+        health_probe_thread.start()
+
         # Now we can setup another server socket to listen for connections from clients
+        client_listen_thread = Thread(target=self.listen_externally)
+        client_listen_thread.start()
 
     def listen_internally(self, sock=None):
         """
@@ -69,7 +82,8 @@ class ConnectionManager:
             # Get the name of the machine that connected
             name = conn.recv(1024).decode()
             # Add the connection to the map
-            self.internal_sockets[name] = conn
+            with self.internal_lock:
+                self.internal_sockets[name] = conn
             listens_completed += 1
         sock.close()
 
@@ -86,10 +100,53 @@ class ConnectionManager:
         while self.alive:
             # Accept the connection
             conn, _ = sock.accept()
-            conn.close()
+            name = conn.getpeername()
+            name = str(name[1])
+            with self.client_lock:
+                self.client_sockets[name] = conn
+            client_thread = Thread(
+                target=self.handle_client, args=(name,))
+            client_thread.start()
         sock.close()
 
-    def connect(self, name: str):
+    def listen_health(self):
+        """
+        Listens for incoming health checks, responds with okay
+        """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((self.identity.host_ip, self.identity.health_port))
+        sock.listen()
+        while self.alive:
+            conn, _ = sock.accept()
+            conn.recv(1024)
+            conn.send("OK".encode())
+            conn.close()
+
+    def probe_health(self):
+        """
+        Sends a health check to every sibling every second
+        """
+        FREQUENCY = 2  # seconds
+        time.sleep(FREQUENCY)
+        while self.alive:
+            print(self.identity.name, "is alive")
+            for sibling in self.living_siblings:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(FREQUENCY)
+                try:
+                    sock.connect((sibling.host_ip, sibling.health_port))
+                    sock.send("OK".encode())
+                    sock.recv(1024)
+                    sock.close()
+                except:
+                    print_error(f"Machine {sibling.name} is dead")
+                    self.living_siblings.remove(sibling)
+            self.is_primary = consts.should_i_be_primary(
+                self.identity.name, self.living_siblings)
+            time.sleep(FREQUENCY)
+
+    def connect_internally(self, name: str):
         """
         Connects to the machine with the given name
         NOTE: Can/is expected to sometimes throw errors
@@ -108,41 +165,28 @@ class ConnectionManager:
         # Add the connection to the map
         self.internal_sockets[name] = sock
 
-    def consume(self, conn, is_internal: bool):
+    def consume_internally(self, conn):
         """
         Once a connection is established, open a thread that continuously
-        listens for incoming messages
-        conn: connection object
-        name: name of the machine that connected
+        listens for incoming requests
         """
         try:
             # NOTE: The use of timeout here is to ensure that we can
             # gracefully kill machines. Essentially the machine will check
             # in once a second to make sure it hasn't been killed, instead
             # of listening forever.
-            conn.settimeout(1)
             while True:
-                try:
-                    # Get the message
-                    msg = conn.recv(2048).decode()
-                    if not msg or len(msg) <= 0:
-                        continue
-                    if is_internal:
-                        with self.internal_lock:
-                            msg_obj = Message.from_string(msg)
-                            self.internal_msgs.put(msg_obj)
-                    else:
-                        with self.client_lock:
-                            req_obj = Request.from_string(msg)
-                            self.client_requests.put(req_obj)
-                except socket.timeout:
-                    if not self.alive:
-                        conn.close()
-                        return
+                # Get the message
+                msg = conn.recv(2048).decode()
+                if not msg or len(msg) <= 0:
+                    raise Exception("Connection closed")
+                req_obj = Request.unmarshal(msg)
+                print(f"Received {req_obj.type} from sibling")
+                self.internal_requests.put(req_obj)
         except Exception:
             conn.close()
 
-    def handle_connections(self):
+    def handle_internal_connections(self):
         """
         Handles the connections to other machines
         """
@@ -151,31 +195,64 @@ class ConnectionManager:
             connected = False
             while not connected:
                 try:
-                    self.connect(name)
+                    self.connect_internally(name)
                     connected = True
                 except Exception:
                     print_error(
                         f"Failed to connect to {name}, retrying in 1 second")
                     time.sleep(1)
 
-    def handle_client(self, conn):
+    def handle_client(self, name):
         """
         Handles a client connection
         """
+        with self.client_lock:
+            conn = self.client_sockets[name]
         while True:
-            if not self.alive:
-                break
-            break
+            try:
+                msg = conn.recv(2048).decode()
+                if not msg or len(msg) <= 0:
+                    continue
+                req_obj = Request.unmarshal(msg)
+                print(
+                    f"Machine {self.identity.name} received {msg} from client {name} (type {req_obj.type})")
+                self.client_requests.put((name, req_obj))
+            except Exception as e:
+                print(f"Got error in handle_client: {e}")
+                conn.close()
+                return
 
-    def send(self, to_machine: str, clock: int):
+    def broadcast_to_backups(self, req: Request):
         """
-        Sends a message to the machine with the given name
+        Takes care of state-updates.
+        NOTE: We let this be called on any kind of request, but notice
+        that we only have to actually do stuff on account changes or messages
+        NOTE: If this machine does not have `is_primary` we'll do nothing
         """
-        if to_machine not in self.internal_sockets:
-            print_error(f"Machine {to_machine} is not connected")
+        print("in broadcast")
+        if not self.is_primary:
             return
-        msg = Message(self.identity.name, clock)
-        self.internal_sockets[to_machine].send(str(msg).encode())
+        if req.type in ["list", "logs"]:
+            return
+        print(f"sending {req.type} to", [s.name for s in self.living_siblings])
+        for sibling in self.living_siblings:
+            self.internal_sockets[sibling.name].send(req.marshal().encode())
+
+    def send_response(self, client_name, resp: Response):
+        """
+        Sends a response to a client
+        """
+        if client_name not in self.client_sockets:
+            print_error(f"Client {client_name} is not connected")
+            return
+        self.client_sockets[client_name].send(resp.marshal().encode())
+
+    def request_generator(self):
+        """
+        Generates client requests from the queue
+        """
+        while True:
+            yield self.client_requests.get()
 
     def kill(self):
         """

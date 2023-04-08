@@ -12,11 +12,9 @@ def run_model():
     pB.start()
     pC.start()
 
-    print("here1")
     pA.join()
     pB.join()
     pC.join()
-    print("here")
 
 
 if __name__ == "__main__":
