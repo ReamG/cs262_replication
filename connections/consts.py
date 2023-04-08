@@ -4,7 +4,8 @@ from connections.schema import Machine
 MACHINE_A = Machine(
     name="A",
     host_ip="localhost",
-    host_port=50051,
+    internal_port=50051,
+    client_port=50052,
     num_listens=2,
     connections=[]
 )
@@ -12,7 +13,8 @@ MACHINE_A = Machine(
 MACHINE_B = Machine(
     name="B",
     host_ip="localhost",
-    host_port=50052,
+    internal_port=50061,
+    client_port=50062,
     num_listens=1,
     connections=["A"]
 )
@@ -20,7 +22,8 @@ MACHINE_B = Machine(
 MACHINE_C = Machine(
     name="C",
     host_ip="localhost",
-    host_port=50053,
+    internal_port=50071,
+    client_port=50072,
     num_listens=0,
     connections=["A", "B"],
 )

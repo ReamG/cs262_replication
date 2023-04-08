@@ -8,7 +8,6 @@ import time
 import pdb
 from threading import Lock, Event
 import schema
-import coding
 import utils
 import connections.consts as consts
 from connections.manager import ConnectionManager
@@ -25,7 +24,6 @@ class Server:
         """
         Initialize the server
         """
-        pdb.set_trace()
         if name not in consts.MACHINE_MAP:
             raise ValueError("Invalid machine name")
         self.identity = consts.MACHINE_MAP[name]
@@ -38,9 +36,10 @@ class Server:
         self.msgs_cache = {}
         self.user_events = {}
         self.alive = True
+        self.name = name
 
-        if os.path.isfile(f"logs/{self.host}_{self.port}_log.out"):
-            with open(f"logs/{self.host}_{self.port}_log.out", "r") as file:
+        if os.path.isfile(f"logs/{self.name}_log.out"):
+            with open(f"logs/{self.name}_log.out", "r") as file:
                 for l in file.readlines():
                     line = l.split("||")
 
@@ -265,13 +264,22 @@ class Server:
                 except Exception:
                     pass
 
+    def kill(self):
+        self.alive = False
+        self.conman.kill()
+
+
+def create_server(name):
+    executor = futures.ThreadPoolExecutor()
+    server = Server(name=name, executor=executor)
+    # server.start()
+    print("Server started")
+    server.kill()
+    return server
+
 
 if __name__ == "__main__":
     try:
-        executor = futures.ThreadPoolExecutor()
-        name = sys.argv[1]
-        server = Server(name=name, executor=executor)
-        server.start()
+        server = create_server(sys.argv[1])
     except KeyboardInterrupt:
-        server.alive = False
         print("Shutting down server...")

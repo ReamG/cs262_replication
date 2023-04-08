@@ -1,10 +1,12 @@
+"""
+
 from schema import Message, Request, ListRequest, SendRequest, Response, ListResponse
 
 VERSION = "0"
 
 ERROR_MESSAGE_LENGTH = 64
 MAX_MESSAGE_LENGTH = 280
-
+ 
 OP_TO_CODE_MAP = {
     "create": "1",
     "login": "2",
@@ -27,38 +29,38 @@ CODE_TO_OP_MAP = {
 
 def pad_to_length(s, length):
     """
-    Pads a string to a given length
-    NOTE: if len(s) > length, this will truncate the string
-    """
+Pads a string to a given length
+NOTE: if len(s) > length, this will truncate the string
+"""
     if len(s) > length:
         return s[:length]
     return s + (length - len(s)) * "\0"
 
 def unpad(s):
     """
-    Removes padding from a string
-    """
+Removes padding from a string
+"""
     return s.strip("\0")
 
 def prep_accounts(accounts):
     """
-    Turns a list of accounts into a string
-    """
+Turns a list of accounts into a string
+"""
     as_strings = [account.user_id for account in accounts]
     return ",".join(as_strings)
 
 def prep_messages(messages):
     """
-    Turns a list of messages into a string
-    """
+Turns a list of messages into a string
+"""
     as_strings = [message.author_id + ": " + message.text for message in messages]
     return ",".join(as_strings)
 
 
 def post_accounts(str):
     """
-    Turns a string of accounts into a list
-    """
+Turns a string of accounts into a list
+"""
     if str == "":
         return []
     
@@ -66,8 +68,8 @@ def post_accounts(str):
 
 def marshal_create_request(req: Request):
     """
-    Marshals a create Request into a byte string
-    """
+Marshals a create Request into a byte string
+"""
     return "{}{}{}".format(
         VERSION,
         pad_to_length(req.user_id, 8),
@@ -76,8 +78,8 @@ def marshal_create_request(req: Request):
 
 def marshal_login_request(req: Request):
     """
-    Marshals a login Request into a byte string
-    """
+Marshals a login Request into a byte string
+"""
     return "{}{}{}".format(
         VERSION,
         pad_to_length(req.user_id, 8),
@@ -86,8 +88,8 @@ def marshal_login_request(req: Request):
 
 def marshal_delete_request(req: Request):
     """
-    Marshals a delete Request into a byte string
-    """
+Marshals a delete Request into a byte string
+"""
     return "{}{}{}".format(
         VERSION,
         pad_to_length(req.user_id, 8),
@@ -96,8 +98,8 @@ def marshal_delete_request(req: Request):
 
 def marshal_list_request(req: ListRequest):
     """
-    Marshals a list Request into a byte string
-    """
+Marshals a list Request into a byte string
+"""
     return "{}{}{}{}{}".format(
         VERSION,
         pad_to_length(req.user_id, 8),
@@ -108,8 +110,8 @@ def marshal_list_request(req: ListRequest):
 
 def marshal_logs_request(req: ListRequest):
     """
-    Marshals a list Request into a byte string
-    """
+Marshals a list Request into a byte string
+"""
     return "{}{}{}{}{}".format(
         VERSION,
         pad_to_length(req.user_id, 8),
@@ -120,8 +122,8 @@ def marshal_logs_request(req: ListRequest):
     
 def marshal_subscribe_request(req: Request):
     """
-    Marshals a subscribe Request into a byte string
-    """
+Marshals a subscribe Request into a byte string
+"""
     return "{}{}{}".format(
         VERSION,
         pad_to_length(req.user_id, 8),
@@ -130,8 +132,8 @@ def marshal_subscribe_request(req: Request):
 
 def marshal_get_request(req: Request):
     """
-    Marshals a subscribe Request into a byte string
-    """
+Marshals a subscribe Request into a byte string
+"""
     return "{}{}{}".format(
         VERSION,
         pad_to_length(req.user_id, 8),
@@ -140,8 +142,8 @@ def marshal_get_request(req: Request):
 
 def marshal_send_request(req: SendRequest):
     """
-    Marshals a send Request into a byte string
-    """
+Marshals a send Request into a byte string
+"""
     return "{}{}{}{}{}".format(
         VERSION,
         pad_to_length(req.user_id, 8),
@@ -152,8 +154,8 @@ def marshal_send_request(req: SendRequest):
 
 def unmarshal_request(data: bytes):
     """
-    Unmarshals a byte string into a Request
-    """
+Unmarshals a byte string into a Request
+"""
     data = data.decode()
     version = data[0]
     user_id = unpad(data[1:9])
@@ -198,8 +200,8 @@ CODE_TO_RESP_MAP = {
 
 def marshal_response(resp: Response):
     """
-    Marshals a Response into a byte string
-    """
+Marshals a Response into a byte string
+"""
     return "{}{}{}{}{}".format(
         VERSION,
         pad_to_length(resp.user_id, 8),
@@ -210,8 +212,8 @@ def marshal_response(resp: Response):
 
 def marshal_list_response(resp: ListResponse):
     """
-    Marshals a ListResponse into a byte string
-    """
+Marshals a ListResponse into a byte string
+"""
     return "{}{}{}{}{}{}".format(
         VERSION,
         pad_to_length(resp.user_id, 8),
@@ -223,8 +225,8 @@ def marshal_list_response(resp: ListResponse):
 
 def marshal_logs_response(resp: ListResponse):
     """
-    Marshals a ListResponse into a byte string
-    """
+Marshals a ListResponse into a byte string
+"""
     return "{}{}{}{}{}{}".format(
         VERSION,
         pad_to_length(resp.user_id, 8),
@@ -236,8 +238,8 @@ def marshal_logs_response(resp: ListResponse):
 
 def marshal_message_response(msg: Message):
     """
-    Marshals a Message into a byte string
-    """
+Marshals a Message into a byte string
+"""
     return "{}{}{}{}{}{}{}".format(
         VERSION,
         pad_to_length(msg.recipient_id, 8),
@@ -250,8 +252,8 @@ def marshal_message_response(msg: Message):
 
 def unmarshal_response(data):
     """
-    Unmarshals a byte string into a Response
-    """
+Unmarshals a byte string into a Response
+"""
     data = data.decode()
     version = data[0]
     user_id = unpad(data[1:9])
@@ -270,3 +272,6 @@ def unmarshal_response(data):
         return Message(recipient_id=user_id, author_id=author_id, text=text, success=success)
     else:
         raise Exception("Unknown response type: {}".format(resp_type))
+
+
+"""
