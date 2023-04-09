@@ -30,9 +30,7 @@ class Server:
         self.identity = consts.MACHINE_MAP[name]  # Hosting info
         self.conman = ConnectionManager(self.identity)  # Connection manager
         self.conman.initialize()  # Connects to all other internal machines
-        self.users = {}  # Users of the system
-        # All chats that have ever happened
-        self.msg_log: Mapping[str, List[Chat]] = {}
+        self.users = {}  # Users of the system NOTE: Also contains all chats that have ever happened
         # Chats that are undelivered
         self.msg_cache: "Mapping[str, Queue[Chat]]" = {}
         self.notif_lock = Lock()  # Make sure only one thread is changing notif_sockets
@@ -127,6 +125,7 @@ class Server:
                 resp = conn_schema.NotifResponse(user_id, True, "", msg)
                 conn.send(resp.marshal().encode())
         except Exception as e:
+            print(f"got {user_id}s notif thread dying")
             print("notif thread died", e.args)
             conn.close()
             with self.notif_lock:
@@ -139,8 +138,7 @@ class Server:
         """
         if request.user_id in self.users:
             return conn_schema.Response(user_id=request.user_id, success=False, error_message="User already exists")
-        new_account = Account(
-            user_id=request.user_id, is_logged_in=False)
+        new_account = Account(user_id=request.user_id)
         self.users[new_account.user_id] = new_account
         self.msg_cache[new_account.user_id] = Queue()
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
@@ -153,9 +151,6 @@ class Server:
         """
         if not request.user_id in self.users:
             return conn_schema.Response(user_id=request.user_id, success=False, error_message="User does not exist")
-        if self.users[request.user_id].is_logged_in:
-            return conn_schema.Response(user_id=request.user_id, success=False, error_message="User already logged in")
-        self.users[request.user_id].is_logged_in = True
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
     def handle_delete(self, request: conn_schema.DeleteRequest):

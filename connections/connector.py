@@ -55,8 +55,6 @@ class ClientConnector():
             response = Response.unmarshal(data.decode())
             return response
         except Exception as e:
-            print(e.args)
-            print("Bad stuff")
             return None
 
     def watch_chats(self, conn):
@@ -66,9 +64,7 @@ class ClientConnector():
         """
         try:
             while True:
-                print(f"connector watching for next message")
                 data = conn.recv(2048)
-                print(f"connector got raw data {data}")
                 if not data or len(data) <= 0:
                     raise Exception("Server closed connection")
                 resp = Response.unmarshal(data.decode())
@@ -88,13 +84,11 @@ class ClientConnector():
         if not self.primary_identity:
             return False
         try:
-            print("connector reaching out for notifs")
             self.sconn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sconn.connect((self.primary_identity.host_ip,
                                 self.primary_identity.notif_port))
             self.sconn.send(user_id.encode())
             data = self.sconn.recv(2048)
-            print("connector got data", data.decode())
             resp = Response.unmarshal(data.decode())
             if not resp.success:
                 raise Exception("Subscription failed")
