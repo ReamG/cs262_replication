@@ -64,7 +64,6 @@ class Client:
             return
 
         utils.print_success("Success! Account created")
-        self.user_id = username
 
     def handle_login(self):
         """

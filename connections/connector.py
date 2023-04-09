@@ -48,7 +48,6 @@ class ClientConnector():
         NOTE: Hangs, does not return until a response has been sent
         """
         try:
-            print(req.marshal())
             self.iconn.send(req.marshal().encode())
             data = self.iconn.recv(2048)
             if not data:

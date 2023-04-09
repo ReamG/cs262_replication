@@ -7,8 +7,8 @@ from queue import Queue
 from threading import Thread
 import connections.consts as consts
 import connections.errors as errors
-from connections.schema import Machine, Message, Request, Response
-from utils import print_error
+from connections.schema import UNIMPORTANT_REQUEST_TYPES, Machine, Request, Response, TakeoverRequest
+from utils import print_error, print_info
 
 
 class ConnectionManager:
@@ -130,7 +130,7 @@ class ConnectionManager:
         FREQUENCY = 2  # seconds
         time.sleep(FREQUENCY)
         while self.alive:
-            print(self.identity.name, "is alive")
+            # print(self.identity.name, "is alive")
             for sibling in self.living_siblings:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(FREQUENCY)
@@ -142,8 +142,14 @@ class ConnectionManager:
                 except:
                     print_error(f"Machine {sibling.name} is dead")
                     self.living_siblings.remove(sibling)
+            old_primary_status = self.is_primary
             self.is_primary = consts.should_i_be_primary(
                 self.identity.name, self.living_siblings)
+            if self.is_primary and not old_primary_status:
+                print_info(f"Machine {self.identity.name} is now primary!")
+                # Self-trigger an internal request to free control
+                takeover_req = TakeoverRequest()
+                self.internal_requests.put(takeover_req)
             time.sleep(FREQUENCY)
 
     def connect_internally(self, name: str):
@@ -209,16 +215,24 @@ class ConnectionManager:
         with self.client_lock:
             conn = self.client_sockets[name]
         while True:
+            conn.settimeout(1)
             try:
+                print("head of try")
                 msg = conn.recv(2048).decode()
                 if not msg or len(msg) <= 0:
-                    continue
+                    raise Exception("Connection closed")
                 req_obj = Request.unmarshal(msg)
                 print(
                     f"Machine {self.identity.name} received {msg} from client {name} (type {req_obj.type})")
-                self.client_requests.put((name, req_obj))
+                # If this machine is not the primary, respond with an appropriate error
+                if not self.is_primary:
+                    resp = Response("", False, "Error: Not primary")
+                    conn.send(resp.marshal().encode())
+                    continue
+                self.client_requests.put((True, name, req_obj))
+            except socket.timeout:
+                continue
             except Exception as e:
-                print(f"Got error in handle_client: {e}")
                 conn.close()
                 return
 
@@ -229,10 +243,9 @@ class ConnectionManager:
         that we only have to actually do stuff on account changes or messages
         NOTE: If this machine does not have `is_primary` we'll do nothing
         """
-        print("in broadcast")
         if not self.is_primary:
             return
-        if req.type in ["list", "logs"]:
+        if req.type in UNIMPORTANT_REQUEST_TYPES:
             return
         print(f"sending {req.type} to", [s.name for s in self.living_siblings])
         for sibling in self.living_siblings:
@@ -247,12 +260,38 @@ class ConnectionManager:
             return
         self.client_sockets[client_name].send(resp.marshal().encode())
 
+    def be_the_primary(self):
+        """
+        Function to continuously get requests from client and yield them
+        """
+        req = self.client_requests.get()
+        return req
+
+    def be_a_backup(self):
+        """
+        Function to return state-updates from the primary until it becomes
+        the primary, at which point it returns None
+        """
+        req = self.internal_requests.get()
+        if req.type == "takeover":
+            return None
+        # Represents (was_primary=False, client_name="", request=req)
+        return (False, "", req)
+
     def request_generator(self):
         """
-        Generates client requests from the queue
+        Every client starts being a backup. Once the health check determines
+        that they should be the new primary, a "dummy" takeover request is
+        triggered which causes be_a_backup to yield None, at which point we
+        switch to be_the_primary and operate as normal until we die
         """
         while True:
-            yield self.client_requests.get()
+            req = self.be_a_backup()
+            if req is None:
+                break
+            yield req
+        while True:
+            yield self.be_the_primary()
 
     def kill(self):
         """

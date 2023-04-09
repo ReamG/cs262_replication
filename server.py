@@ -40,53 +40,36 @@ class Server:
         self.alive = True
         self.rehydrate()
 
+    def get_logfile(self):
+        return f"logs/{self.name}_log.out"
+
     def rehydrate(self):
         """
         Run when a server boots, it should read it's log and construct
         the state of the server (accounts and messages)
         """
-        filename = f"logs/{self.name}_log.out"
+        if not os.path.exists("logs"):
+            os.mkdir("logs")
+        filename = self.get_logfile()
         if not os.path.exists(filename):
-            # No log file exists
-            return
+            # If the file doesn't exist make a blank one
+            with open(filename, "w") as file:
+                file.write("")
         with open(filename, "r") as file:
             for l in file.readlines():
-                line = l.split("||")
+                req = conn_schema.Request.unmarshal(l)
+                self.handle_req(req)
 
-                if line[0] == "account":
-                    account = Account(user_id=line[1], is_logged_in=False)
-                    self.users[account.user_id] = account
-                elif line[0] == "chat":
-                    chat = Chat(
-                        author_id=line[1], recipient_id=line[2], text=line[3], success=(line[4][:-1] == "True"))
-                    if chat.recipient_id not in self.users:
-                        self.users[chat.recipient_id] = Account(
-                            user_id=chat.recipient_id, is_logged_in=False)
-                    if chat.recipient_id not in self.msg_log:
-                        self.msg_log[chat.recipient_id] = []
-                    self.users[chat.recipient_id].msg_log.append(chat)
-                elif line[0] == "delete":
-                    del self.users[line[1][:-1]]
-
-    def update_log(self, item):
+    def update_log(self, req: conn_schema.Request):
         """
         Add items to server log file
         """
-        if not os.path.exists("logs"):
-            os.mkdir("logs")
-        fout = open(f"logs/{self.name}_log.out", "a")
-        if type(item) == Account:
-            fout.write(
-                f"account||{item.user_id}||{item.is_logged_in}||{item.msg_log}\n")
-        elif type(item) == Chat:
-            fout.write(
-                f"chat||{item.author_id}||{item.recipient_id}||{item.text}||{item.success}\n")
-        elif type(item) == conn_schema.DeleteRequest:
-            print("delete request")
-            fout.write(f"delete||{item.user_id}\n")
-        else:
-            utils.print_error("Error: Invalid log item")
-        fout.close()
+        if req.type in conn_schema.UNIMPORTANT_REQUEST_TYPES:
+            return
+        filename = self.get_logfile()
+        fout = open(filename, "a")
+        fout.write(req.marshal() + "\n")
+        fout.flush()
         fout.close()
 
     def handle_create(self, request: conn_schema.CreateRequest):
@@ -97,8 +80,7 @@ class Server:
         if request.user_id in self.users:
             return conn_schema.Response(user_id=request.user_id, success=False, error_message="User already exists")
         new_account = Account(
-            user_id=request.user_id, is_logged_in=True)
-        self.update_log(new_account)
+            user_id=request.user_id, is_logged_in=False)
         self.users[new_account.user_id] = new_account
         self.msg_cache[new_account.user_id] = Queue()
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
@@ -123,7 +105,6 @@ class Server:
         """
         if not request.user_id in self.users:
             return conn_schema.Response(user_id=request.user_id, success=False, error_message="User does not exist")
-        # self.update_log(conn_schema.DeleteRequest(user_id=request.user_id))
         del self.users[request.user_id]
         del self.msg_cache[request.user_id]
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
@@ -154,7 +135,6 @@ class Server:
             self.msg_cache[request.recipient_id] = Queue()
         self.msg_cache[request.recipient_id].put(chat)
         self.users[request.recipient_id].msg_log.insert(0, chat)
-        self.update_log(chat)
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
     def handle_logs(self, request):
@@ -169,27 +149,35 @@ class Server:
                 request.page * LOG_PAGE_SIZE: (request.page + 1) * LOG_PAGE_SIZE]
             return conn_schema.LogsResponse(user_id=request.user_id, success=True, error_message="", msgs=limited_to_page)
 
+    def handle_req(self, req):
+        if req.type == "create":
+            resp = self.handle_create(req)
+        elif req.type == "login":
+            resp = self.handle_login(req)
+        elif req.type == "list":
+            resp = self.handle_list(req)
+        elif req.type == "logs":
+            resp = self.handle_logs(req)
+        elif req.type == "send":
+            resp = self.handle_send(req)
+        elif req.type == "delete":
+            resp = self.handle_delete(req)
+        else:
+            resp = conn_schema.Response(
+                user_id=req.user_id, success=False, error_message="Invalid request type")
+        return resp
+
     def start(self):
         request_iter = self.conman.request_generator()
         while True:
-            (client_name, req) = next(request_iter)
-            if req.type == "create":
-                resp = self.handle_create(req)
-            elif req.type == "login":
-                resp = self.handle_login(req)
-            elif req.type == "list":
-                resp = self.handle_list(req)
-            elif req.type == "logs":
-                resp = self.handle_logs(req)
-            elif req.type == "send":
-                resp = self.handle_send(req)
-            elif req.type == "delete":
-                resp = self.handle_delete(req)
-            else:
-                resp = conn_schema.Response(
-                    user_id=req.user_id, success=False, error_message="Invalid request type")
-            self.conman.broadcast_to_backups(req)
-            self.conman.send_response(client_name, resp)
+            (was_primary, client_name, req) = next(request_iter)
+            resp = self.handle_req(req)
+            if resp.success:
+                self.update_log(req)
+            if was_primary:
+                if resp.success:
+                    self.conman.broadcast_to_backups(req)
+                self.conman.send_response(client_name, resp)
 
     def kill(self):
         self.alive = False

@@ -75,6 +75,11 @@ class Message:
         return isinstance(obj, Message) and self.author == obj.author and self.payload == obj.payload
 
 
+IMPORTANT_REQUEST_TYPES = ["login", "create", "send", "delete"]
+UNIMPORTANT_REQUEST_TYPES = ["list", "logs"]
+REQUEST_TYPES = IMPORTANT_REQUEST_TYPES + UNIMPORTANT_REQUEST_TYPES
+
+
 class Request:
     """
     A base class for all requests from client -> server
@@ -184,6 +189,18 @@ class DeleteRequest(Request):
 
     def marshal(self):
         return f"{self.user_id}@@{self.type}"
+
+
+class TakeoverRequest(Request):
+    """
+    Not really an actual request, just a class that can be put on the internal
+    queue to help a server signal to itself that it should take over the
+    primary role
+    """
+
+    def __init__(self):
+        super().__init__("")
+        self.type = "takeover"
 
 
 class Response:
