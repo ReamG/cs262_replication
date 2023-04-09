@@ -22,14 +22,13 @@ class Chat:
     A class for chats sent from user -> user (NOT TO BE CONFUSED WITH INTERNAL MESSAGES)
     """
 
-    def __init__(self, author_id, recipient_id, text, success):
+    def __init__(self, author_id, recipient_id, text):
         self.author_id = author_id
         self.recipient_id = recipient_id
         self.text = text
-        self.success = success
 
     def marshal(self):
-        return f"{self.author_id}@@{self.recipient_id}@@{self.text}@@{self.success}"
+        return f"{self.author_id}@@{self.recipient_id}@@{self.text}"
 
     @staticmethod
     def unmarshal(message):

@@ -80,6 +80,8 @@ class Request:
             recipient_id = parts[2]
             text = parts[3]
             return SendRequest(user_id, recipient_id, text)
+        elif req_type == "notif":
+            return NotifRequest(user_id)
         elif req_type == "delete":
             return DeleteRequest(user_id)
         else:
@@ -180,7 +182,7 @@ class NotifRequest(Request):
         self.type = "notif"
 
     def marshal(self):
-        return f"{self.type}@@{self.user_id}"
+        return f"{self.user_id}@@{self.type}"
 
 
 class Response:
@@ -212,10 +214,11 @@ class Response:
             msgs = parts[4]
             return LogsResponse(user_id, success, error_message, msgs)
         elif resp_type == "notif":
-            chat = parts[4]
-            chat = data_schema.Chat.unmarshal(chat)
+            author_id = parts[4]
+            recipient_id = parts[5]
+            text = parts[6]
+            chat = data_schema.Chat(author_id, recipient_id, text)
             return NotifResponse(user_id, success, error_message, chat)
-
         else:
             return Response(user_id, success, error_message)
 

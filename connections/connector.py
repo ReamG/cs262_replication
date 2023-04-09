@@ -66,7 +66,9 @@ class ClientConnector():
         """
         try:
             while True:
+                print(f"connector watching for next message")
                 data = conn.recv(2048)
+                print(f"connector got raw data {data}")
                 if not data or len(data) <= 0:
                     raise Exception("Server closed connection")
                 resp = Response.unmarshal(data.decode())
