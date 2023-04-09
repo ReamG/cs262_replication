@@ -198,6 +198,14 @@ class Client:
             len(resp.msgs), page_int, wildcard))
         for msg in resp.msgs:
             print(msg)
+    
+    def handle_fallover(self):
+        req = conn_schema.FalloverRequest(self.user_id)
+        resp = self.connector.send_request(req)
+        if not resp.success:
+            utils.print_error("Error: {}".format(resp.error_message))
+            return
+        utils.print_success("Success! Fallover initiated")
 
     def parse_input(self, input_str):
         if input_str == "create":
@@ -212,6 +220,8 @@ class Client:
             return self.handle_send
         elif input_str == "logs":
             return self.handle_logs
+        elif input_str == "fallover":
+            return self.handle_fallover
         else:
             utils.print_error("Error: Invalid command")
         return None

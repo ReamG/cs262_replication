@@ -29,6 +29,8 @@ class ConnectionManager:
         self.client_lock = threading.Lock()
         self.client_sockets: Mapping[str, any] = {}
         self.client_requests: "Queue[(str, Request)]" = Queue()
+        self.external_socket = None
+        self.health_socket = None
 
     def initialize(self):
         """
@@ -92,36 +94,47 @@ class ConnectionManager:
         Listens for incoming external connections. Adds a connection to the socket
         map once connected, and repeats indefinitely
         """
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((self.identity.host_ip, self.identity.client_port))
-        sock.listen()
-        while self.alive:
-            # Accept the connection
-            conn, _ = sock.accept()
-            name = conn.getpeername()
-            name = str(name[1])
-            with self.client_lock:
-                self.client_sockets[name] = conn
-            client_thread = Thread(
-                target=self.handle_client, args=(name,))
-            client_thread.start()
-        sock.close()
+        self.external_socket = socket.socket(
+            socket.AF_INET, socket.SOCK_STREAM)
+        self.external_socket.setsockopt(
+            socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.external_socket.bind(
+            (self.identity.host_ip, self.identity.client_port))
+        self.external_socket.listen()
+        try:
+            while self.alive:
+                # Accept the connection
+                conn, _ = self.external_socket.accept()
+                name = conn.getpeername()
+                name = str(name[1])
+                with self.client_lock:
+                    self.client_sockets[name] = conn
+                client_thread = Thread(
+                    target=self.handle_client, args=(name,))
+                client_thread.start()
+            self.external_socket.close()
+        except:
+            self.external_socket.close()
 
     def listen_health(self):
         """
         Listens for incoming health checks, responds with PingResponse
         """
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((self.identity.host_ip, self.identity.health_port))
-        sock.listen()
-        while self.alive:
-            conn, _ = sock.accept()
-            conn.recv(2048)
-            resp = PingResponse()
-            conn.send(resp.marshal().encode())
-            conn.close()
+        self.health_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.health_socket.setsockopt(
+            socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.health_socket.bind(
+            (self.identity.host_ip, self.identity.health_port))
+        self.health_socket.listen()
+        try:
+            while self.alive:
+                conn, _ = self.health_socket.accept()
+                conn.recv(2048)
+                resp = PingResponse()
+                conn.send(resp.marshal().encode())
+                conn.close()
+        except:
+            self.health_socket.close()
 
     def probe_health(self):
         """
@@ -278,7 +291,9 @@ class ConnectionManager:
         """
         if not self.is_primary:
             return
-        if req.type in UNIMPORTANT_REQUEST_TYPES:
+        if req.type == "fallover":
+            pass
+        elif req.type in UNIMPORTANT_REQUEST_TYPES:
             return
         print(f"sending {req.type} to", [s.name for s in self.living_siblings])
         for sibling in self.living_siblings:
@@ -331,7 +346,7 @@ class ConnectionManager:
         Kills the connection manager
         """
         self.alive = False
-        for sock in list(self.internal_sockets.values()) + self.client_sockets:
+        for sock in list(self.internal_sockets.values()) + list(self.client_sockets.values()):
             # Helps prevent the weird "address is already in use" error
             try:
                 sock.shutdown(1)
@@ -339,3 +354,7 @@ class ConnectionManager:
                 # Makes sure that we at least close every socket
                 pass
             sock.close()
+        if self.external_socket:
+            self.external_socket.close()
+        if self.health_socket:
+            self.health_socket.close()
