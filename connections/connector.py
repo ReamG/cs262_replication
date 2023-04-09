@@ -6,7 +6,7 @@ from queue import Queue
 from threading import Thread
 import connections.consts as consts
 import connections.errors as errors
-from connections.schema import Machine, Request, Response
+from connections.schema import Machine, Request, Response, PingResponse
 from utils import print_msg_box
 
 LEXOGRAPHIC = [consts.MACHINE_A, consts.MACHINE_B, consts.MACHINE_C]
@@ -68,6 +68,11 @@ class ClientConnector():
                 if not data or len(data) <= 0:
                     raise Exception("Server closed connection")
                 resp = Response.unmarshal(data.decode())
+                if resp.type == "ping":
+                    # Server just seeing what's up, be chill
+                    ping = PingResponse()
+                    conn.send(ping.marshal().encode())
+                    continue
                 if resp.type != "notif" or not resp.success:
                     raise Exception("Bad response")
                 print_msg_box(resp.chat)

@@ -3,7 +3,7 @@ import os
 import sys
 from threading import Lock
 from typing import List, Mapping
-from queue import Queue
+from queue import Queue, Empty
 from schema import Account, Chat
 import connections.consts as consts
 import connections.schema as conn_schema
@@ -81,10 +81,8 @@ class Server:
         sock.bind((self.identity.host_ip, self.identity.notif_port))
         sock.listen()
         while self.alive:
-            print("made it to notif listener")
             conn, _ = sock.accept()
             user_id = conn.recv(2048).decode()
-            print("notif listener got", user_id)
             with self.notif_lock:
                 if user_id in self.notif_sockets:
                     resp = conn_schema.Response(
@@ -92,7 +90,6 @@ class Server:
                 else:
                     resp = conn_schema.Response(user_id, True, "")
                     self.notif_sockets[user_id] = conn
-            print("notif listener sending", resp.marshal().encode())
             conn.send(resp.marshal().encode())
             handler = Thread(target=self.notif_thread, args=(user_id,))
             handler.start()
@@ -102,15 +99,32 @@ class Server:
         A thread that is for a specific logged in user and does the
         instant delivery shenanigans
         """
+        CHECK_IN_RATE = 3
         with self.notif_lock:
             if user_id not in self.notif_sockets:
                 return
             conn = self.notif_sockets[user_id]
         try:
             while True:
-                print(f"about to block for {user_id}s next message")
-                msg = self.msg_cache[user_id].get()
-                print(f"got {user_id}s next message", msg.text)
+                # NOTE: It can take up to 3 seconds for a logout to propogate
+                # This is probably fine
+                try:
+                    msg = self.msg_cache[user_id].get(
+                        block=True, timeout=CHECK_IN_RATE)
+                except Empty:
+                    # Send a ping regularly to see that client is still there
+                    ping = conn_schema.PingResponse()
+                    conn.send(ping.marshal().encode())
+                    data = conn.recv(2048)
+                    if not data or len(data) <= 0:
+                        # If the ping fails we assume the client has died and we stop
+                        raise Exception("Client not there")
+                    resp = conn_schema.Response.unmarshal(data.decode())
+                    if not resp.success:
+                        # If the ping fails we assume the client has died and we stop
+                        raise Exception("Client not there")
+                    # If the ping succeeds go back to listening
+                    continue
                 req = conn_schema.NotifRequest(user_id)
                 # Marks in the system that a message has been delivered
                 self.update_log(req)
@@ -122,9 +136,13 @@ class Server:
         except Exception as e:
             print(f"got {user_id}s notif thread dying")
             print("notif thread died", e.args)
+            # Error means the client has stopped listening on this thread
+            # Clean up by deliting the socket from the map so that otehr clients
+            # can connect using this username
             conn.close()
             with self.notif_lock:
-                del self.notif_sockets[user_id]
+                if user_id in self.notif_sockets:
+                    del self.notif_sockets[user_id]
 
     def handle_create(self, request: conn_schema.CreateRequest):
         """

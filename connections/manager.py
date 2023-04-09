@@ -7,7 +7,7 @@ from queue import Queue
 from threading import Thread
 import connections.consts as consts
 import connections.errors as errors
-from connections.schema import UNIMPORTANT_REQUEST_TYPES, Machine, Request, Response, TakeoverRequest, NotifResponse
+from connections.schema import UNIMPORTANT_REQUEST_TYPES, Machine, Request, Response, TakeoverRequest, NotifResponse, PingResponse
 from utils import print_error, print_info
 
 
@@ -80,7 +80,7 @@ class ConnectionManager:
             # Accept the connection
             conn, _ = sock.accept()
             # Get the name of the machine that connected
-            name = conn.recv(1024).decode()
+            name = conn.recv(2048).decode()
             # Add the connection to the map
             with self.internal_lock:
                 self.internal_sockets[name] = conn
@@ -110,7 +110,7 @@ class ConnectionManager:
 
     def listen_health(self):
         """
-        Listens for incoming health checks, responds with okay
+        Listens for incoming health checks, responds with PingResponse
         """
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -118,13 +118,14 @@ class ConnectionManager:
         sock.listen()
         while self.alive:
             conn, _ = sock.accept()
-            conn.recv(1024)
-            conn.send("OK".encode())
+            conn.recv(2048)
+            resp = PingResponse()
+            conn.send(resp.marshal().encode())
             conn.close()
 
     def probe_health(self):
         """
-        Sends a health check to every sibling every second
+        Sends a health check to every sibling regularly
         """
         FREQUENCY = 2  # seconds
         time.sleep(FREQUENCY)
@@ -134,8 +135,9 @@ class ConnectionManager:
                 sock.settimeout(FREQUENCY)
                 try:
                     sock.connect((sibling.host_ip, sibling.health_port))
-                    sock.send("OK".encode())
-                    sock.recv(1024)
+                    ping = PingResponse()
+                    sock.send(ping.marshal().encode())
+                    sock.recv(2048)
                     sock.close()
                 except:
                     print_error(f"Machine {sibling.name} is dead")
@@ -232,10 +234,9 @@ class ConnectionManager:
                     del self.client_sockets[name]
                 return
 
+        """
     def handle_notif(self, user_id):
-        """
         Handles a clients subscription to notifications (login state)
-        """
         with self.notif_lock:
             conn = self.notif_sockets[user_id]
         while True:
@@ -266,6 +267,7 @@ class ConnectionManager:
                 with self.notif_lock:
                     del self.notif_sockets[user_id]
                 return
+        """
 
     def broadcast_to_backups(self, req: Request):
         """
