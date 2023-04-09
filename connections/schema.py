@@ -43,7 +43,7 @@ class Machine:
 
 
 IMPORTANT_REQUEST_TYPES = ["create", "send", "delete", "notif"]
-UNIMPORTANT_REQUEST_TYPES = ["login", "list", "logs"]
+UNIMPORTANT_REQUEST_TYPES = ["login", "list", "logs", "fallover"]
 REQUEST_TYPES = IMPORTANT_REQUEST_TYPES + UNIMPORTANT_REQUEST_TYPES
 
 
@@ -84,6 +84,8 @@ class Request:
             return NotifRequest(user_id)
         elif req_type == "delete":
             return DeleteRequest(user_id)
+        elif req_type == "fallover":
+            return FalloverRequest(user_id)
         else:
             return Request(user_id)
 
@@ -92,6 +94,14 @@ class CreateRequest(Request):
     def __init__(self, user_id):
         super().__init__(user_id)
         self.type = "create"
+
+    def marshal(self):
+        return f"{self.user_id}@@{self.type}"
+
+class FalloverRequest(Request):
+    def __init__(self, user_id):
+        super().__init__(user_id)
+        self.type = "fallover"
 
     def marshal(self):
         return f"{self.user_id}@@{self.type}"
