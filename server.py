@@ -83,8 +83,10 @@ class Server:
         sock.bind((self.identity.host_ip, self.identity.notif_port))
         sock.listen()
         while self.alive:
+            print("made it to notif listener")
             conn, _ = sock.accept()
-            user_id = conn.recv(1024).decode()
+            user_id = conn.recv(2048).decode()
+            print("notif listener got", user_id)
             with self.notif_lock:
                 if user_id in self.notif_sockets:
                     resp = conn_schema.Response(
@@ -92,6 +94,7 @@ class Server:
                 else:
                     resp = conn_schema.Response(user_id, True, "")
                     self.notif_sockets[user_id] = conn
+            print("notif listener sending", resp.marshal().encode())
             conn.send(resp.marshal().encode())
             handler = Thread(target=self.notif_thread, args=(user_id,))
             handler.start()
@@ -107,7 +110,9 @@ class Server:
             conn = self.notif_sockets[user_id]
         try:
             while True:
+                print(f"about to block for {user_id}s next message")
                 msg = self.msg_cache[user_id].get()
+                print(f"got {user_id}s next message", msg.text)
                 req = conn_schema.NotifRequest(user_id)
                 # Marks in the system that a message has been delivered
                 self.update_log(req)
@@ -116,7 +121,8 @@ class Server:
                 # Gives the client the notif
                 resp = conn_schema.NotifResponse(user_id, True, "", msg)
                 conn.send(resp.marshal().encode())
-        except:
+        except Exception as e:
+            print("notif thread died", e.args)
             conn.close()
             with self.notif_lock:
                 del self.notif_sockets[user_id]

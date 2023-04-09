@@ -214,9 +214,7 @@ class ConnectionManager:
         with self.client_lock:
             conn = self.client_sockets[name]
         while True:
-            conn.settimeout(1)
             try:
-                print("head of try")
                 msg = conn.recv(2048).decode()
                 if not msg or len(msg) <= 0:
                     raise Exception("Connection closed")

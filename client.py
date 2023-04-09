@@ -81,10 +81,17 @@ class Client:
         if len(username) <= 0:
             utils.print_error("Error: username cannot be empty")
             return
+        # First issue a login, which checks the user exists
         req = conn_schema.LoginRequest(username)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
+            return
+        # Then attempt to subscribe, which checks that no one else is logged in as this user
+        sub_success = self.connector.subscribe(username)
+        if not sub_success:
+            utils.print_error(
+                "Error: Another client is already logged in as {}".format(username))
             return
         utils.print_success("Success! Logged in as {}".format(username))
         self.user_id = username

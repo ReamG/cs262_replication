@@ -20,6 +20,7 @@ class Machine:
         internal_port: int,
         client_port: int,
         health_port: int,
+        notif_port: int,
         num_listens: int,
         connections: List[str],
     ) -> None:
@@ -33,6 +34,8 @@ class Machine:
         self.client_port = client_port
         # The port the machine should listen on for health checks
         self.health_port = health_port
+        # The port the machine should listen on for notification sub requests
+        self.notif_port = notif_port
         # The number of connections the machine should listen for
         self.num_listens = num_listens
         # The names of the machines that this machine should connect to
@@ -177,7 +180,7 @@ class NotifRequest(Request):
         self.type = "notif"
 
     def marshal(self):
-        return f"{self.type}@@{self.message.marshal()}"
+        return f"{self.type}@@{self.user_id}"
 
 
 class Response:

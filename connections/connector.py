@@ -6,8 +6,8 @@ from queue import Queue
 from threading import Thread
 import connections.consts as consts
 import connections.errors as errors
-from connections.schema import Machine, Message, Request, Response
-from utils import print_error
+from connections.schema import Machine, Request, Response
+from utils import print_msg_box
 
 LEXOGRAPHIC = [consts.MACHINE_A, consts.MACHINE_B, consts.MACHINE_C]
 
@@ -20,8 +20,8 @@ class ClientConnector():
     """
 
     def __init__(self):
-        self.iconn = None
-        self.wconn = None
+        self.iconn = None  # Interactive connection, for sending requests and getting responses
+        self.sconn = None  # Subscription connection, for receiving notifs only
         self.primary_identity = None
 
         # Loop through the servers in lexographic order and try to connect
@@ -59,36 +59,51 @@ class ClientConnector():
             print("Bad stuff")
             return None
 
+    def watch_chats(self, conn):
+        """
+        Will do receives on this connection until it dies, expecting
+        all data received to be of the form of NotifResponse
+        """
+        try:
+            while True:
+                data = conn.recv(2048)
+                if not data or len(data) <= 0:
+                    raise Exception("Server closed connection")
+                resp = Response.unmarshal(data.decode())
+                if resp.type != "notif" or not resp.success:
+                    raise Exception("Bad response")
+                print_msg_box(resp.chat)
+        except Exception as e:
+            conn.close()
+
+    def subscribe(self, user_id):
+        """
+        Spins up a tread in the background to listen for notifs
+        NOTE: If the user is already logged in, will return False
+        and not listen to messages (client should show this)
+        NOTE: Returns True on success
+        """
+        if not self.primary_identity:
+            return False
+        try:
+            print("connector reaching out for notifs")
+            self.sconn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sconn.connect((self.primary_identity.host_ip,
+                                self.primary_identity.notif_port))
+            self.sconn.send(user_id.encode())
+            data = self.sconn.recv(2048)
+            print("connector got data", data.decode())
+            resp = Response.unmarshal(data.decode())
+            if not resp.success:
+                raise Exception("Subscription failed")
+            watcher = Thread(target=self.watch_chats, args=(self.sconn,))
+            watcher.start()
+            return True
+        except Exception as e:
+            return False
+
     def kill(self):
         if self.iconn:
             self.iconn.close()
         if self.wconn:
             self.wconn.close()
-
-    """
-    def watch_messages(self):
-        A function that will be run in a separate thread to watch for messages
-        NOTE: Takes advantage of the ThreadPoolExecutor to run this function
-        while True:
-            message = coding.marshal_get_request(schema.Request(self.user_id))
-            self.wsocket.sendall(message)
-            data = self.wsocket.recv(1024)
-            if not data:
-                raise Exception("Server closed connection")
-            message = coding.unmarshal_response(data)
-            if message.success:
-                utils.print_msg_box(message)
-            time.sleep(1)
-    """
-
-    """
-    def subscribe(self):
-        Subscribe to the server to receive messages
-        if not self.is_logged_in() or not self.executor or not self.isocket:
-            utils.print_error(
-                "Error: Something has gone wrong. You may need to restart your client")
-            return
-        self.wsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.wsocket.connect((self.host, self.port))
-        self.executor.submit(self.watch_messages)
-    """
