@@ -1,19 +1,14 @@
-# echo-server.py
-
 import socket
-from concurrent import futures
 import os
 import sys
-import time
-import pdb
-from threading import Lock, Event
+from threading import Lock
 from typing import List, Mapping
 from queue import Queue
 from schema import Account, Chat
-import utils
 import connections.consts as consts
 import connections.schema as conn_schema
 from connections.manager import ConnectionManager
+from threading import Thread
 
 ACCOUNT_PAGE_SIZE = 4
 LOG_PAGE_SIZE = 4
@@ -34,11 +29,17 @@ class Server:
         self.identity = consts.MACHINE_MAP[name]  # Hosting info
         self.conman = ConnectionManager(self.identity)  # Connection manager
         self.conman.initialize()  # Connects to all other internal machines
-        self.users = {}
+        self.users = {}  # Users of the system
+        # All chats that have ever happened
         self.msg_log: Mapping[str, List[Chat]] = {}
+        # Chats that are undelivered
         self.msg_cache: "Mapping[str, Queue[Chat]]" = {}
+        self.notif_lock = Lock()  # Make sure only one thread is changing notif_sockets
+        self.notif_sockets: Mapping[str, any] = {}  # Sockets for notif threads
         self.alive = True
         self.rehydrate()
+        notif_listen_thread = Thread(target=self.notif_listener)
+        notif_listen_thread.start()  # Listen for clients that want notifications
 
     def get_logfile(self):
         return f"logs/{self.name}_log.out"
@@ -71,6 +72,54 @@ class Server:
         fout.write(req.marshal() + "\n")
         fout.flush()
         fout.close()
+
+    def notif_listener(self):
+        """
+        Handles connections from clients that have logged in and want
+        immediate delivery of notifications
+        """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((self.identity.host_ip, self.identity.notif_port))
+        sock.listen()
+        while self.alive:
+            conn, _ = sock.accept()
+            user_id = conn.recv(1024).decode()
+            with self.notif_lock:
+                if user_id in self.notif_sockets:
+                    resp = conn_schema.Response(
+                        user_id, False, "Already logged in")
+                else:
+                    resp = conn_schema.Response(user_id, True, "")
+                    self.notif_sockets[user_id] = conn
+            conn.send(resp.marshal().encode())
+            handler = Thread(target=self.notif_thread, args=(user_id,))
+            handler.start()
+
+    def notif_thread(self, user_id: str):
+        """
+        A thread that is for a specific logged in user and does the
+        instant delivery shenanigans
+        """
+        with self.notif_lock:
+            if user_id not in self.notif_sockets:
+                return
+            conn = self.notif_sockets[user_id]
+        try:
+            while True:
+                msg = self.msg_cache[user_id].get()
+                req = conn_schema.NotifRequest(user_id)
+                # Marks in the system that a message has been delivered
+                self.update_log(req)
+                # Lets the backups know about this so they have the same view of undelivered messages
+                self.conman.broadcast_to_backups(req)
+                # Gives the client the notif
+                resp = conn_schema.NotifResponse(user_id, True, "", msg)
+                conn.send(resp.marshal().encode())
+        except:
+            conn.close()
+            with self.notif_lock:
+                del self.notif_sockets[user_id]
 
     def handle_create(self, request: conn_schema.CreateRequest):
         """

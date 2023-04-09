@@ -7,7 +7,7 @@ from queue import Queue
 from threading import Thread
 import connections.consts as consts
 import connections.errors as errors
-from connections.schema import UNIMPORTANT_REQUEST_TYPES, Machine, Request, Response, TakeoverRequest
+from connections.schema import UNIMPORTANT_REQUEST_TYPES, Machine, Request, Response, TakeoverRequest, NotifResponse
 from utils import print_error, print_info
 
 
@@ -96,7 +96,6 @@ class ConnectionManager:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((self.identity.host_ip, self.identity.client_port))
         sock.listen()
-        # Listen the specified number of times
         while self.alive:
             # Accept the connection
             conn, _ = sock.accept()
@@ -234,6 +233,43 @@ class ConnectionManager:
                 continue
             except Exception as e:
                 conn.close()
+                with self.client_lock:
+                    del self.client_sockets[name]
+                return
+
+    def handle_notif(self, user_id):
+        """
+        Handles a clients subscription to notifications (login state)
+        """
+        with self.notif_lock:
+            conn = self.notif_sockets[user_id]
+        while True:
+            try:
+                msg = conn.recv(2048).decode()
+                if not msg or len(msg) <= 0:
+                    raise Exception("Connection closed")
+                req_obj = Request.unmarshal(msg)
+                # Make sure it's a notif request
+                if req_obj.type != "notif":
+                    resp = Response("", False, "Error: Not a notif request")
+                # Make sure this machine is the primary
+                if not self.is_primary:
+                    resp = Response("", False, "Error: Not primary")
+                    conn.send(resp.marshal().encode())
+                    continue
+                # Blocks until a new message
+                chat = self.msg_cache[user_id].get()
+                # Try to send the chat
+                # if it succeeds, great
+                # if not, add it back to the beginning of the queue
+                resp = NotifResponse(user_id, True, "", chat)
+                conn.send(resp.marshal().encode())
+            except socket.timeout:
+                continue
+            except Exception as e:
+                conn.close()
+                with self.notif_lock:
+                    del self.notif_sockets[user_id]
                 return
 
     def broadcast_to_backups(self, req: Request):

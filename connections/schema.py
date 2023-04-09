@@ -39,44 +39,8 @@ class Machine:
         self.connections = connections
 
 
-class Message:
-    """
-    A class that represents a message passed between two internal machines
-    """
-
-    def __init__(self, author: str, payload: str):
-        self.author = author
-        self.payload = payload
-
-    @staticmethod
-    def from_string(rep: str):
-        """
-        Parses a string into a Message object. Used for unmarshalling after
-        receiving data over the socket.
-        NOTE: Given the simplicity of messages, it really is as simple as just
-        splitting at the first :: and requiring that machine names not include
-        the string "@@"
-        """
-        parts = rep.split("@@")
-        return Message(author=parts[0], payload=parts[1])
-
-    def __str__(self):
-        """
-        Turns a message object into a string. Used for marshalling before
-        sending data over the socket.
-        """
-        return f"{self.author}@@{self.payload}"
-
-    def __eq__(self, obj: object) -> bool:
-        """
-        Helper function for testing to determine whether messages are
-        equivalent.
-        """
-        return isinstance(obj, Message) and self.author == obj.author and self.payload == obj.payload
-
-
-IMPORTANT_REQUEST_TYPES = ["login", "create", "send", "delete"]
-UNIMPORTANT_REQUEST_TYPES = ["list", "logs"]
+IMPORTANT_REQUEST_TYPES = ["create", "send", "delete", "notif"]
+UNIMPORTANT_REQUEST_TYPES = ["login", "list", "logs"]
 REQUEST_TYPES = IMPORTANT_REQUEST_TYPES + UNIMPORTANT_REQUEST_TYPES
 
 
@@ -203,6 +167,19 @@ class TakeoverRequest(Request):
         self.type = "takeover"
 
 
+class NotifRequest(Request):
+    """
+    A request by a user to get one message from their cache
+    """
+
+    def __init__(self, user_id):
+        super().__init__(user_id)
+        self.type = "notif"
+
+    def marshal(self):
+        return f"{self.type}@@{self.message.marshal()}"
+
+
 class Response:
     """
     A base class for all responses from server -> client
@@ -231,6 +208,11 @@ class Response:
         elif resp_type == "logs":
             msgs = parts[4]
             return LogsResponse(user_id, success, error_message, msgs)
+        elif resp_type == "notif":
+            chat = parts[4]
+            chat = data_schema.Chat.unmarshal(chat)
+            return NotifResponse(user_id, success, error_message, chat)
+
         else:
             return Response(user_id, success, error_message)
 
@@ -279,3 +261,17 @@ class LogsResponse(Response):
 
     def marshal(self):
         return f"{self.user_id}@@{self.type}@@{self.success}@@{self.error_message}@@{LogsResponse.marshal_msgs(self.msgs)}"
+
+
+class NotifResponse(Response):
+    """
+    A response to a NotifRequest
+    """
+
+    def __init__(self, user_id, success, error_message, chat: data_schema.Chat):
+        super().__init__(user_id, success, error_message)
+        self.type = "notif"
+        self.chat = chat
+
+    def marshal(self):
+        return f"{self.user_id}@@{self.type}@@{self.success}@@{self.error_message}@@{self.chat.marshal()}"

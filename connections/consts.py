@@ -7,6 +7,7 @@ MACHINE_A = Machine(
     internal_port=50051,
     client_port=50052,
     health_port=50053,
+    notif_port=50054,
     num_listens=2,
     connections=[]
 )
@@ -17,6 +18,7 @@ MACHINE_B = Machine(
     internal_port=50061,
     client_port=50062,
     health_port=50063,
+    notif_port=50064,
     num_listens=1,
     connections=["A"]
 )
@@ -27,6 +29,7 @@ MACHINE_C = Machine(
     internal_port=50071,
     client_port=50072,
     health_port=50073,
+    notif_port=50074,
     num_listens=0,
     connections=["A", "B"],
 )
