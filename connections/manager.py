@@ -186,7 +186,6 @@ class ConnectionManager:
                     raise Exception("Connection closed")
                 req_obj = Request.unmarshal(msg)
                 print(f"Received {req_obj.type} from sibling")
-                print(f"raw {msg} from sibling")
                 self.internal_requests.put(req_obj)
         except Exception:
             conn.close()
@@ -219,8 +218,6 @@ class ConnectionManager:
                 if not msg or len(msg) <= 0:
                     raise Exception("Connection closed")
                 req_obj = Request.unmarshal(msg)
-                print(
-                    f"Machine {self.identity.name} received {msg} from client {name} (type {req_obj.type})")
                 # If this machine is not the primary, respond with an appropriate error
                 if not self.is_primary:
                     resp = Response("", False, "Error: Not primary")
