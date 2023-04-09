@@ -185,10 +185,9 @@ class Server:
         if not request.recipient_id in self.users:
             return conn_schema.Response(user_id=request.user_id, success=False, error_message="User does not exist")
         chat = Chat(
-            author_id=request.user_id, recipient_id=request.recipient_id, text=request.text, success=True)
+            author_id=request.user_id, recipient_id=request.recipient_id, text=request.text)
         if not request.recipient_id in self.msg_cache:
             self.msg_cache[request.recipient_id] = Queue()
-        self.msg_cache[request.recipient_id].put(chat)
         self.users[request.recipient_id].msg_log.insert(0, chat)
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
@@ -227,11 +226,20 @@ class Server:
         while True:
             (was_primary, client_name, req) = next(request_iter)
             resp = self.handle_req(req)
+            # First, we update our own log
             if resp.success:
                 self.update_log(req)
+            # Then do primary specific stuff
             if was_primary:
+                # Broadcast to backups
                 if resp.success:
                     self.conman.broadcast_to_backups(req)
+                    # Kind of hacky, but prevents a race condition that occurs
+                    # because we are using built-in queues to do blocking
+                    if req.type == "send":
+                        chat = Chat(
+                            author_id=req.user_id, recipient_id=req.recipient_id, text=req.text)
+                        self.msg_cache[req.recipient_id].put(chat)
                 self.conman.send_response(client_name, resp)
 
     def kill(self):

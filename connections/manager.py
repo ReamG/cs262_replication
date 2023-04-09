@@ -129,7 +129,6 @@ class ConnectionManager:
         FREQUENCY = 2  # seconds
         time.sleep(FREQUENCY)
         while self.alive:
-            # print(self.identity.name, "is alive")
             for sibling in self.living_siblings:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(FREQUENCY)
@@ -187,6 +186,7 @@ class ConnectionManager:
                     raise Exception("Connection closed")
                 req_obj = Request.unmarshal(msg)
                 print(f"Received {req_obj.type} from sibling")
+                print(f"raw {msg} from sibling")
                 self.internal_requests.put(req_obj)
         except Exception:
             conn.close()
