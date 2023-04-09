@@ -58,7 +58,7 @@ class Server:
                 file.write("")
         with open(filename, "r") as file:
             for l in file.readlines():
-                req = conn_schema.Request.unmarshal(l)
+                req = conn_schema.Request.unmarshal(l[:-1])
                 self.handle_req(req)
 
     def update_log(self, req: conn_schema.Request):
