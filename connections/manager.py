@@ -157,7 +157,7 @@ class ConnectionManager:
         """
         Sends a health check to every sibling regularly
         """
-        FREQUENCY = 2  # seconds
+        FREQUENCY = 1  # seconds
         time.sleep(FREQUENCY)
         while self.alive:
             for sibling in self.living_siblings:

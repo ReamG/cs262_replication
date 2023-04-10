@@ -7,11 +7,6 @@ server:
 client:
 	python3 client.py
 
-generate:
-	cd part2; \
-	python3 -m grpc_tools.protoc -I=. --python_out=. --pyi_out=. --grpc_python_out=. schema.proto; \
-	cd ..
-
 A: 
 	python3 server.py A
 
@@ -20,3 +15,6 @@ B:
 
 C:
 	python3 server.py C
+
+runner:
+	python3 runner.py
