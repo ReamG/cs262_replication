@@ -57,6 +57,8 @@ class Client:
             utils.print_error("Error: username cannot contain \"||\"")
             return
         req = conn_schema.CreateRequest(username)
+        self.relogin(self.user_id)
+        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
 
         if not resp.success:
@@ -83,6 +85,7 @@ class Client:
             return
         # First issue a login, which checks the user exists
         req = conn_schema.LoginRequest(username)
+        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -110,6 +113,7 @@ class Client:
             utils.print_error("Aborting delete")
             return
         req = conn_schema.DeleteRequest(self.user_id)
+        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -138,6 +142,7 @@ class Client:
             utils.print_error("Error: page must be an integer")
             return
         req = conn_schema.ListRequest(self.user_id, wildcard, page_int)
+        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -146,6 +151,28 @@ class Client:
             len(resp.accounts), page_int, wildcard))
         for account in resp.accounts:
             print(account.user_id)
+
+    def relogin(self):
+        if self.user_id == "":
+            return
+        username = self.user_id
+        self.user_id = ""
+        # First issue a login, which checks the user exists
+        req = conn_schema.LoginRequest(username)
+        self.relogin(self.user_id)
+        resp = self.connector.send_request(req)
+        if not resp.success:
+            utils.print_error("Error: {}".format(resp.error_message))
+            return
+        # Then attempt to subscribe, which checks that no one else is logged in as this user
+        sub_success = self.connector.subscribe(username)
+        if not sub_success:
+            utils.print_error(
+                "Error: Another client is already logged in as {}".format(username))
+            return
+        utils.print_success("Success! Logged in as {}".format(username))
+        self.user_id = username
+
 
     def handle_send(self):
         if not self.is_logged_in():
@@ -167,6 +194,7 @@ class Client:
             utils.print_error("Error: text cannot contain \"@@\"")
             return
         req = conn_schema.SendRequest(self.user_id, recipient, text)
+        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -190,6 +218,7 @@ class Client:
             utils.print_error("Error: page must be an integer")
             return
         req = conn_schema.LogsRequest(self.user_id, wildcard, page_int)
+        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -201,6 +230,7 @@ class Client:
     
     def handle_fallover(self):
         req = conn_schema.FalloverRequest(self.user_id)
+        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -227,19 +257,19 @@ class Client:
         return None
 
     def start(self):
-        try:
-            while True:
-                raw_input = input("> Enter a command: ")
-                if raw_input[:5] == "sleep":
-                    # NOTE: Special logic to help with testing
-                    time.sleep(int(raw_input[6:]))
-                    continue
-                handler = self.parse_input(raw_input)
-                if handler:
-                    handler()
-        except Exception as e:
-            print("Unexpected error: {}".format(e))
-            self.connector.kill()
+        # try:
+        while True:
+            raw_input = input("> Enter a command: ")
+            if raw_input[:5] == "sleep":
+                # NOTE: Special logic to help with testing
+                time.sleep(int(raw_input[6:]))
+                continue
+            handler = self.parse_input(raw_input)
+            if handler:
+                handler()
+        # except Exception as e:
+        #     print("Unexpected error: {}".format(e))
+        #     self.connector.kill()
 
 
 if __name__ == "__main__":

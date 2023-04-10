@@ -321,6 +321,9 @@ class Server:
                 self.notif_sockets[user_id].close()
         if self.notif_listen_socket:
             self.notif_listen_socket.close()
+        time.sleep(1)
+        for thread in threading.enumerate():
+            print(thread)
 
 
 def create_server(name):

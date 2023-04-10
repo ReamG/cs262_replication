@@ -358,7 +358,7 @@ class ConnectionManager:
 
     def request_generator(self):
         """
-        Every client starts being a backup. Once the health check determines
+        Every server starts being a backup. Once the health check determines
         that they should be the new primary, a "dummy" takeover request is
         triggered which causes be_a_backup to yield None, at which point we
         switch to be_the_primary and operate as normal until we die
