@@ -57,8 +57,6 @@ class Client:
             utils.print_error("Error: username cannot contain \"||\"")
             return
         req = conn_schema.CreateRequest(username)
-        self.relogin(self.user_id)
-        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
 
         if not resp.success:
@@ -85,7 +83,6 @@ class Client:
             return
         # First issue a login, which checks the user exists
         req = conn_schema.LoginRequest(username)
-        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -113,7 +110,7 @@ class Client:
             utils.print_error("Aborting delete")
             return
         req = conn_schema.DeleteRequest(self.user_id)
-        self.relogin(self.user_id)
+        self.relogin()
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -142,7 +139,7 @@ class Client:
             utils.print_error("Error: page must be an integer")
             return
         req = conn_schema.ListRequest(self.user_id, wildcard, page_int)
-        self.relogin(self.user_id)
+        self.relogin()
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -159,7 +156,6 @@ class Client:
         self.user_id = ""
         # First issue a login, which checks the user exists
         req = conn_schema.LoginRequest(username)
-        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -193,7 +189,7 @@ class Client:
             utils.print_error("Error: text cannot contain \"@@\"")
             return
         req = conn_schema.SendRequest(self.user_id, recipient, text)
-        self.relogin(self.user_id)
+        self.relogin()
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -217,7 +213,7 @@ class Client:
             utils.print_error("Error: page must be an integer")
             return
         req = conn_schema.LogsRequest(self.user_id, wildcard, page_int)
-        self.relogin(self.user_id)
+        self.relogin()
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
@@ -229,7 +225,6 @@ class Client:
 
     def handle_fallover(self):
         req = conn_schema.FalloverRequest(self.user_id)
-        self.relogin(self.user_id)
         resp = self.connector.send_request(req)
         if not resp.success:
             utils.print_error("Error: {}".format(resp.error_message))
