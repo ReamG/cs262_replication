@@ -24,25 +24,49 @@ class Server:
         """
         Initialize the server
         """
+        ###### CONSTANTS ######
         self.name = name
         if name not in consts.MACHINE_MAP:
             raise ValueError("Invalid machine name")
         self.identity = consts.MACHINE_MAP[name]  # Hosting info
-        self.conman = ConnectionManager(self.identity)  # Connection manager
-        self.conman.initialize()  # Connects to all other internal machines
+        # Bring myself up to date with info I have locally
         self.users = {}  # Users of the system NOTE: Also contains all chats that have ever happened
         # Chats that are undelivered
         self.msg_cache: "Mapping[str, Queue[Chat]]" = {}
         self.notif_lock = Lock()  # Make sure only one thread is changing notif_sockets
         self.notif_sockets: Mapping[str, any] = {}  # Sockets for notif threads
         self.alive = True
+        ###### ACTIONS ######
         self.rehydrate()
+        self.conman = ConnectionManager(self.identity)  # Connection manager
+        # Connects to all other internal machines
+        self.conman.initialize(self.get_progress(), self.get_reqs_by_progress)
         self.notif_listen_socket = None
         notif_listen_thread = Thread(target=self.notif_listener)
         notif_listen_thread.start()  # Listen for clients that want notifications
 
     def get_logfile(self):
         return f"logs/{self.name}_log.out"
+
+    def get_progress(self):
+        """
+        Get the progress of this machine (count of lines in log file)
+        """
+        filename = self.get_logfile()
+        with open(filename, "r") as file:
+            return len(file.readlines())
+
+    def get_reqs_by_progress(self, start_progress: int, end_progress: int) -> List[conn_schema.Request]:
+        """
+        Gets a list of requests from this machines log file with progress >= start_progress
+        and progress < end_progress. Can return an empty array. Also does the
+        work of unmarshalling and making the requests pretty.
+        """
+        filename = self.get_logfile()
+        with open(filename, "r") as file:
+            lines = file.readlines()
+            lines = lines[start_progress:end_progress]
+            return [conn_schema.Request.unmarshal(l[:-1]) for l in lines]
 
     def rehydrate(self):
         """
@@ -59,7 +83,7 @@ class Server:
         with open(filename, "r") as file:
             for l in file.readlines():
                 req = conn_schema.Request.unmarshal(l[:-1])
-                self.handle_req(req)
+                self.handle_req(req, False)
 
     def update_log(self, req: conn_schema.Request):
         """
@@ -152,7 +176,7 @@ class Server:
                 if user_id in self.notif_sockets:
                     del self.notif_sockets[user_id]
 
-    def handle_create(self, request: conn_schema.CreateRequest):
+    def handle_create(self, request: conn_schema.CreateRequest, _):
         """
         Creates a new account. Fails if the user_id already exists.
         NOTE: Requires the user_lock to be held
@@ -164,7 +188,7 @@ class Server:
         self.msg_cache[new_account.user_id] = Queue()
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
-    def handle_login(self, request: conn_schema.LoginRequest):
+    def handle_login(self, request: conn_schema.LoginRequest, _):
         """
         Logs in an existing account. Fails if the user_id does not exist or
         if the user is already logged in.
@@ -174,7 +198,7 @@ class Server:
             return conn_schema.Response(user_id=request.user_id, success=False, error_message="User does not exist")
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
-    def handle_delete(self, request: conn_schema.DeleteRequest):
+    def handle_delete(self, request: conn_schema.DeleteRequest, _):
         """
         Deletes an existing account. Fails if the user_id does not exist.
         NOTE: Requires the user_lock to be held
@@ -185,7 +209,7 @@ class Server:
         del self.msg_cache[request.user_id]
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
-    def handle_list(self, request: conn_schema.ListRequest):
+    def handle_list(self, request: conn_schema.ListRequest, _):
         """
         Lists all accounts that match the given wildcard.
         NOTE: "" will match all accounts. Other strings will simply use
@@ -198,7 +222,7 @@ class Server:
             request.page * ACCOUNT_PAGE_SIZE: (request.page + 1) * ACCOUNT_PAGE_SIZE]
         return conn_schema.ListResponse(user_id=request.user_id, success=True, error_message="", accounts=limited_to_page)
 
-    def handle_send(self, request):
+    def handle_send(self, request, was_primary: bool):
         """
         Sends a message to the given user. If the user does not exist, return
         an error.
@@ -209,10 +233,26 @@ class Server:
             author_id=request.user_id, recipient_id=request.recipient_id, text=request.text)
         if not request.recipient_id in self.msg_cache:
             self.msg_cache[request.recipient_id] = Queue()
+        if not was_primary:
+            self.msg_cache[request.recipient_id].put(chat)
         self.users[request.recipient_id].msg_log.insert(0, chat)
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
-    def handle_logs(self, request):
+    def handle_notif(self, request, _):
+        """
+        The primary will have their msg_cache continuously emptied by
+        clients subscribing to real-time updates. The backups, however,
+        need to have their caches managed by discrete reqs. This is what
+        this is for. Since requests are well ordered by the primary, this
+        is as simple as just getting the latest chat and removing it
+        """
+        if not request.user_id in self.msg_cache or self.msg_cache[request.user_id].empty():
+            print("THIS THING NOOOOOO")
+            return
+        self.msg_cache[request.user_id].get()
+        return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
+
+    def handle_logs(self, request, _):
         """
         Returns a users message logs
         """
@@ -224,29 +264,29 @@ class Server:
                 request.page * LOG_PAGE_SIZE: (request.page + 1) * LOG_PAGE_SIZE]
             return conn_schema.LogsResponse(user_id=request.user_id, success=True, error_message="", msgs=limited_to_page)
 
-    def handle_fallover(self, request):
+    def handle_fallover(self, request, _):
         """
         Handles a fallover request
         """
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
-    def handle_req(self, req):
+    def handle_req(self, req, was_primary: bool):
         if req.type == "create":
-            resp = self.handle_create(req)
+            resp = self.handle_create(req, was_primary)
         elif req.type == "login":
-            resp = self.handle_login(req)
+            resp = self.handle_login(req, was_primary)
         elif req.type == "list":
-            resp = self.handle_list(req)
+            resp = self.handle_list(req, was_primary)
         elif req.type == "logs":
-            resp = self.handle_logs(req)
+            resp = self.handle_logs(req, was_primary)
         elif req.type == "send":
-            resp = self.handle_send(req)
+            resp = self.handle_send(req, was_primary)
+        elif req.type == "notif":
+            resp = self.handle_notif(req, was_primary)
         elif req.type == "delete":
-            resp = self.handle_delete(req)
+            resp = self.handle_delete(req, was_primary)
         elif req.type == "fallover":
-            resp = conn_schema.Response(
-                user_id=req.user_id, success=True, error_message="")
-            resp = self.handle_fallover(req)
+            resp = self.handle_fallover(req, was_primary)
         else:
             resp = conn_schema.Response(
                 user_id=req.user_id, success=False, error_message="Invalid request type")
@@ -256,7 +296,7 @@ class Server:
         request_iter = self.conman.request_generator()
         while True:
             (was_primary, client_name, req) = next(request_iter)
-            resp = self.handle_req(req)
+            resp = self.handle_req(req, was_primary)
             # First, we update our own log
             if resp.success:
                 self.update_log(req)

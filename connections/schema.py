@@ -98,6 +98,7 @@ class CreateRequest(Request):
     def marshal(self):
         return f"{self.user_id}@@{self.type}"
 
+
 class FalloverRequest(Request):
     def __init__(self, user_id):
         super().__init__(user_id)

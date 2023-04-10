@@ -25,6 +25,7 @@ class ConnectionManager:
         self.alive = True
         self.internal_lock = threading.Lock()
         self.internal_sockets: Mapping[str, any] = {}
+        self.internal_progress: Mapping[str, int] = {}
         self.internal_requests: "Queue[Request]" = Queue()
         self.client_lock = threading.Lock()
         self.client_sockets: Mapping[str, any] = {}
@@ -32,17 +33,26 @@ class ConnectionManager:
         self.external_socket = None
         self.health_socket = None
 
-    def initialize(self):
+    def initialize(self, progress: int, get_reqs_by_progress):
         """
         Does the work of initializing the connection manager
+        @param progress: The progress of this machine (size of log)
+        @param get_reqs_by_progress: A function that returns a list of requests
+        that have been processed by this machine by progress count (can pass in lower and upper bound)
         """
+        self.internal_progress[self.identity.name] = progress
         # First it should establish connections to all other internal machines
         listen_thread = Thread(target=self.listen_internally)
-        connect_thread = Thread(target=self.handle_internal_connections)
+        connect_thread = Thread(
+            target=self.handle_internal_connections, args=(progress, ))
         listen_thread.start()
         connect_thread.start()
         listen_thread.join()
         connect_thread.join()
+
+        # Now that we've gotten the other machines and names we need to
+        # play catch up so we have persistent progress
+        self.play_catchup(get_reqs_by_progress)
 
         # At this point we assume that self.internal_sockets is populated
         # with sockets to all other internal machines
@@ -78,16 +88,24 @@ class ConnectionManager:
         sock.listen()
         # Listen the specified number of times
         listens_completed = 0
-        while listens_completed < self.identity.num_listens:
-            # Accept the connection
-            conn, _ = sock.accept()
-            # Get the name of the machine that connected
-            name = conn.recv(2048).decode()
-            # Add the connection to the map
-            with self.internal_lock:
-                self.internal_sockets[name] = conn
-            listens_completed += 1
-        sock.close()
+        try:
+            while listens_completed < self.identity.num_listens:
+                # Accept the connection
+                conn, _ = sock.accept()
+                # Get the name of the machine that connected
+                payload = conn.recv(2048).decode()
+                (name, raw_other_progress) = payload.split("@@")
+                self.internal_progress[name] = int(raw_other_progress)
+                conn.send(
+                    str(self.internal_progress[self.identity.name]).encode())
+                # Add the connection to the map
+                with self.internal_lock:
+                    self.internal_sockets[name] = conn
+                listens_completed += 1
+            sock.close()
+        except Exception as e:
+            print(e.args)
+            sock.close()
 
     def listen_externally(self):
         """
@@ -165,7 +183,7 @@ class ConnectionManager:
                 self.internal_requests.put(takeover_req)
             time.sleep(FREQUENCY)
 
-    def connect_internally(self, name: str):
+    def connect_internally(self, name: str, progress: int):
         """
         Connects to the machine with the given name
         NOTE: Can/is expected to sometimes throw errors
@@ -180,7 +198,11 @@ class ConnectionManager:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((identity.host_ip, identity.internal_port))
         # Send the name of this machine
-        sock.send(self.identity.name.encode())
+        payload = f"{self.identity.name}@@{progress}"
+        sock.send(payload.encode())
+        # Receive the progress of the other machine
+        other_progress = int(sock.recv(2048).decode())
+        self.internal_progress[name] = other_progress
         # Add the connection to the map
         self.internal_sockets[name] = sock
 
@@ -205,7 +227,7 @@ class ConnectionManager:
         except Exception:
             conn.close()
 
-    def handle_internal_connections(self):
+    def handle_internal_connections(self, progress: int):
         """
         Handles the connections to other machines
         """
@@ -214,12 +236,56 @@ class ConnectionManager:
             connected = False
             while not connected:
                 try:
-                    self.connect_internally(name)
+                    self.connect_internally(name, progress)
                     connected = True
                 except Exception:
                     print_error(
                         f"Failed to connect to {name}, retrying in 1 second")
                     time.sleep(1)
+
+    def play_catchup(self, get_reqs_by_progress):
+        """
+        Should be called after self.internal_progress has been populated.
+        First figures out which machine has the most progress. Then, it
+        requests all of the requests from that machine that are greater
+        than the current progress OR broadcasts these requests to the
+        machines that need them.
+        """
+        progress_leader = self.identity.name
+        for (name, prog) in self.internal_progress.items():
+            higher_progress = prog > self.internal_progress[progress_leader]
+            same_progress = prog == self.internal_progress[progress_leader]
+            if higher_progress or (same_progress and name < progress_leader):
+                progress_leader = name
+
+        if progress_leader == self.identity.name:
+            # We are the progress leader! Yay!
+            my_progress = self.internal_progress[self.identity.name]
+            for (name, prog) in self.internal_progress.items():
+                if name == self.identity.name:
+                    continue
+                reqs = get_reqs_by_progress(prog, my_progress)
+                conn = self.internal_sockets[name]
+                for req in reqs:
+                    conn.send(req.marshal().encode())
+                    conn.recv(2048)  # Receive a ping
+            return
+        else:
+            # We need to catch up! No!
+            delta = self.internal_progress[progress_leader] - \
+                self.internal_progress[self.identity.name]
+            if delta == 0:
+                return
+            conn = self.internal_sockets[progress_leader]
+            for _ in range(delta):
+                # Get the message
+                msg = conn.recv(2048).decode()
+                if not msg or len(msg) <= 0:
+                    raise Exception("Can't catch up, connection closed")
+                req_obj = Request.unmarshal(msg)
+                self.internal_requests.put(req_obj)
+                resp = PingResponse()
+                conn.send(resp.marshal().encode())
 
     def handle_client(self, name):
         """
@@ -247,41 +313,6 @@ class ConnectionManager:
                     del self.client_sockets[name]
                 return
 
-        """
-    def handle_notif(self, user_id):
-        Handles a clients subscription to notifications (login state)
-        with self.notif_lock:
-            conn = self.notif_sockets[user_id]
-        while True:
-            try:
-                msg = conn.recv(2048).decode()
-                if not msg or len(msg) <= 0:
-                    raise Exception("Connection closed")
-                req_obj = Request.unmarshal(msg)
-                # Make sure it's a notif request
-                if req_obj.type != "notif":
-                    resp = Response("", False, "Error: Not a notif request")
-                # Make sure this machine is the primary
-                if not self.is_primary:
-                    resp = Response("", False, "Error: Not primary")
-                    conn.send(resp.marshal().encode())
-                    continue
-                # Blocks until a new message
-                chat = self.msg_cache[user_id].get()
-                # Try to send the chat
-                # if it succeeds, great
-                # if not, add it back to the beginning of the queue
-                resp = NotifResponse(user_id, True, "", chat)
-                conn.send(resp.marshal().encode())
-            except socket.timeout:
-                continue
-            except Exception as e:
-                conn.close()
-                with self.notif_lock:
-                    del self.notif_sockets[user_id]
-                return
-        """
-
     def broadcast_to_backups(self, req: Request):
         """
         Takes care of state-updates.
@@ -292,6 +323,8 @@ class ConnectionManager:
         if not self.is_primary:
             return
         if req.type == "fallover":
+            # Fallover doesn't go in the logs but we still want to
+            # broadcast it to the backups, so we need this if statement
             pass
         elif req.type in UNIMPORTANT_REQUEST_TYPES:
             return
