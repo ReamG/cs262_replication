@@ -178,7 +178,6 @@ class Server:
     def handle_create(self, request: conn_schema.CreateRequest, _):
         """
         Creates a new account. Fails if the user_id already exists.
-        NOTE: Requires the user_lock to be held
         """
         if request.user_id in self.users:
             return conn_schema.Response(user_id=request.user_id, success=False, error_message="User already exists")
@@ -191,7 +190,6 @@ class Server:
         """
         Logs in an existing account. Fails if the user_id does not exist or
         if the user is already logged in.
-        NOTE: Requires the user_lock to be held
         """
         if not request.user_id in self.users:
             return conn_schema.Response(user_id=request.user_id, success=False, error_message="User does not exist")
@@ -200,7 +198,6 @@ class Server:
     def handle_delete(self, request: conn_schema.DeleteRequest, _):
         """
         Deletes an existing account. Fails if the user_id does not exist.
-        NOTE: Requires the user_lock to be held
         """
         if not request.user_id in self.users:
             return conn_schema.Response(user_id=request.user_id, success=False, error_message="User does not exist")
@@ -213,7 +210,6 @@ class Server:
         Lists all accounts that match the given wildcard.
         NOTE: "" will match all accounts. Other strings will simply use
         Python's built-in "in" operator.
-        NOTE: Requires the user_lock to be held
         """
         satisfying = filter(
             lambda user: request.wildcard in user.user_id, self.users.values())
@@ -254,13 +250,12 @@ class Server:
         """
         Returns a users message logs
         """
-        with self.user_lock:
-            msg_hist = self.users[request.user_id].msg_log
-            satisfying = filter(
-                lambda msg: request.wildcard in msg.author_id, msg_hist)
-            limited_to_page = list(satisfying)[
-                request.page * LOG_PAGE_SIZE: (request.page + 1) * LOG_PAGE_SIZE]
-            return conn_schema.LogsResponse(user_id=request.user_id, success=True, error_message="", msgs=limited_to_page)
+        msg_hist = self.users[request.user_id].msg_log
+        satisfying = filter(
+            lambda msg: request.wildcard in msg.author_id, msg_hist)
+        limited_to_page = list(satisfying)[
+            request.page * LOG_PAGE_SIZE: (request.page + 1) * LOG_PAGE_SIZE]
+        return conn_schema.LogsResponse(user_id=request.user_id, success=True, error_message="", msgs=limited_to_page)
 
     def handle_fallover(self, request, _):
         """
