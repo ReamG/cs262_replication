@@ -96,14 +96,11 @@ class ClientConnector():
                 if not data or len(data) <= 0:
                     raise Exception("Server closed connection")
                 resp = Response.unmarshal(data.decode())
-                if resp.type == "ping":
-                    # Server just seeing what's up, be chill
-                    ping = PingResponse()
-                    conn.send(ping.marshal().encode())
-                    continue
-                if resp.type != "notif" or not resp.success:
+                if resp.type not in ["notif", "ping"] or not resp.success:
                     raise Exception("Bad response")
                 print_msg_box(resp.chat)
+                ping = PingResponse()
+                conn.send(ping.marshal().encode())
         except Exception as e:
             conn.close()
 

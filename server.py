@@ -166,6 +166,7 @@ class Server:
                 # Gives the client the notif
                 resp = conn_schema.NotifResponse(user_id, True, "", msg)
                 conn.send(resp.marshal().encode())
+                data = conn.recv(2048)
         except Exception as e:
             # Error means the client has stopped listening on this thread
             # Clean up by deliting the socket from the map so that otehr clients
