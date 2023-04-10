@@ -98,7 +98,8 @@ class ClientConnector():
                 resp = Response.unmarshal(data.decode())
                 if resp.type not in ["notif", "ping"] or not resp.success:
                     raise Exception("Bad response")
-                print_msg_box(resp.chat)
+                if resp.type == "notif":
+                    print_msg_box(resp.chat)
                 ping = PingResponse()
                 conn.send(ping.marshal().encode())
         except Exception as e:
