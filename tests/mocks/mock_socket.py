@@ -13,7 +13,7 @@ class socket:
         self.binded_to = None
         self.connected_to = None
         self.has_listened = False
-        self.fake_connect_names = []
+        self.fake_connects = []
         self.sent: list[bytes] = []
 
     # HELPER FUNCTIONS
@@ -25,12 +25,12 @@ class socket:
         """
         self.fake_sends.put(data)
 
-    def set_fake_accept_names(self, names: list[str]):
+    def set_fake_accepts(self, accepts):
         """
         Makes it so the next call to accept will return a socket that
         will return the given name when recv is called
         """
-        self.next_fake_connect_names = names
+        self.fake_connects = accepts
 
     # MOCKED FUNCTIONS
 
@@ -51,6 +51,9 @@ class socket:
     def setsockopt(self, _, __, ___):
         pass
 
+    def getpeername(self):
+        return (1, "peer")
+
     def bind(self, tup):
         self.binded_to = tup
 
@@ -59,10 +62,10 @@ class socket:
 
     def accept(self):
         new_sock = socket(0, 0)
-        if len(self.next_fake_connect_names) <= 0:
+        if len(self.fake_connects) <= 0:
             raise Exception("No more names to accept")
-        new_sock.add_fake_send(self.next_fake_connect_names[0])
-        self.next_fake_connect_names = self.next_fake_connect_names[1:]
+        new_sock.add_fake_send(self.fake_connects[0])
+        self.fake_connects = self.fake_connects[1:]
         return new_sock, ""
 
     def connect(self, tup):
