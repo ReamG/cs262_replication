@@ -59,7 +59,6 @@ class ClientConnector():
                 raise Exception("Server closed connection")
             response = Response.unmarshal(data.decode())
             if response == None:
-                print("YOU GOT HERE CONGRATS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                 raise Exception("Bad response")
             print(response)
             return response
