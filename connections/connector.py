@@ -80,7 +80,6 @@ class ClientConnector():
                 raise Exception("Bad response")
             return response
         except Exception as e:
-            print(e.args)
             self.iconn.close()
             self.iconn = None
             self.attempt_connection()

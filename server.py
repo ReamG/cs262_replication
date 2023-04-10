@@ -291,21 +291,22 @@ class Server:
         while True:
             (was_primary, client_name, req) = next(request_iter)
             resp = self.handle_req(req, was_primary)
-            # First, we update our own log
-            if resp.success:
-                self.update_log(req)
-            # Then do primary specific stuff
             if was_primary:
-                # Broadcast to backups
                 if resp.success:
+                    # Broadcast to backups
                     self.conman.broadcast_to_backups(req)
-                    # Kind of hacky, but prevents a race condition that occurs
-                    # because we are using built-in queues to do blocking
+                    # Update log
+                    self.update_log(req)
+                    # Put it in the cache to be available for notifications
                     if req.type == "send":
                         chat = Chat(
                             author_id=req.user_id, recipient_id=req.recipient_id, text=req.text)
                         self.msg_cache[req.recipient_id].put(chat)
                 self.conman.send_response(client_name, resp)
+            else:
+                # Is a backup
+                if resp.success:
+                    self.update_log(req)
             if req.type == "fallover":
                 self.kill()
                 break

@@ -3,7 +3,7 @@ from connections.schema import Machine
 # Create the three identities that the machines can assume
 MACHINE_A = Machine(
     name="A",
-    host_ip="10.250.155.180",
+    host_ip="localhost",
     internal_port=50051,
     client_port=50052,
     health_port=50053,
@@ -14,7 +14,7 @@ MACHINE_A = Machine(
 
 MACHINE_B = Machine(
     name="B",
-    host_ip="10.250.138.58",
+    host_ip="localhost",
     internal_port=50061,
     client_port=50062,
     health_port=50063,
@@ -25,7 +25,7 @@ MACHINE_B = Machine(
 
 MACHINE_C = Machine(
     name="C",
-    host_ip="10.250.155.180",
+    host_ip="localhost",
     internal_port=50071,
     client_port=50072,
     health_port=50073,
