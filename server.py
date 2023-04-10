@@ -269,7 +269,6 @@ class Server:
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
     def handle_req(self, req, was_primary: bool):
-        print(req.marshal())
         if req.type == "create":
             resp = self.handle_create(req, was_primary)
         elif req.type == "login":
@@ -324,8 +323,6 @@ class Server:
         if self.notif_listen_socket:
             self.notif_listen_socket.close()
         time.sleep(1)
-        for thread in threading.enumerate():
-            print(thread)
 
 
 def create_server(name):

@@ -48,22 +48,36 @@ class ClientConnector():
                 self.iconn = None
             self.ix = (self.ix + 1) % len(LEXOGRAPHIC)
 
+    def ping_server(self):
+        """
+        Makes sure the server is still there
+        """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        try:
+            sock.connect((self.primary_identity.host_ip,
+                         self.primary_identity.health_port))
+            ping = PingResponse()
+            sock.send(ping.marshal().encode())
+            sock.recv(2048)
+            sock.close()
+            return True
+        except:
+            return False
+
     def send_request(self, req: Request):
         """
         Sends a request to the server.
         NOTE: Hangs, does not return until a response has been sent
         """
-        print(self.primary_identity.name)
         try:
             self.iconn.send(req.marshal().encode())
             data = self.iconn.recv(2048)
-            print(data)
             if not data:
                 raise Exception("Server closed connection")
             response = Response.unmarshal(data.decode())
             if response == None:
                 raise Exception("Bad response")
-            print(response)
             return response
         except Exception as e:
             self.iconn.close()

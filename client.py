@@ -1,16 +1,9 @@
-# echo-client.py
-
-import socket
 import utils
-import schema
-from connections import consts
 from connections.connector import ClientConnector
 import connections.schema as conn_schema
-
 from concurrent import futures
-
-import pdb
 import time
+from threading import Thread
 
 
 class Client:
@@ -20,6 +13,8 @@ class Client:
 
     def __init__(self):
         self.connector = ClientConnector()
+        ping_thread = Thread(target=self.ping_server)
+        ping_thread.start()
         self.user_id = ""
 
     def is_logged_in(self):
@@ -29,6 +24,19 @@ class Client:
         so this is indeed a correct proxy to status
         """
         return len(self.user_id) > 0
+
+    def ping_server(self):
+        """
+        Checks the primary regularly and relogs in if needed
+        """
+        FREQUENCY = 1
+        time.sleep(FREQUENCY)
+        while True:
+            okay = self.connector.ping_server()
+            if not okay:
+                self.connector.attempt_connection()
+                self.relogin()
+            time.sleep(FREQUENCY)
 
     def handle_create(self):
         """
@@ -66,7 +74,6 @@ class Client:
         utils.print_success("Success! Account created")
 
     def handle_login(self):
-        pdb.set_trace()
         """
         Fails if the user is already logged in, they submit an empty username,
         or if the login fails in expected way.
@@ -158,16 +165,8 @@ class Client:
         # First issue a login, which checks the user exists
         req = conn_schema.LoginRequest(username)
         resp = self.connector.send_request(req)
-        if not resp.success:
-            utils.print_error("Error: {}".format(resp.error_message))
-            return
         # Then attempt to subscribe, which checks that no one else is logged in as this user
-        sub_success = self.connector.subscribe(username)
-        if not sub_success:
-            utils.print_error(
-                "Error: Another client is already logged in as {}".format(username))
-            return
-        utils.print_success("Success! Logged in as {}".format(username))
+        self.connector.subscribe(username)
         self.user_id = username
 
     def handle_send(self):
@@ -262,9 +261,6 @@ class Client:
             handler = self.parse_input(raw_input)
             if handler:
                 handler()
-        # except Exception as e:
-        #     print("Unexpected error: {}".format(e))
-        #     self.connector.kill()
 
 
 if __name__ == "__main__":
