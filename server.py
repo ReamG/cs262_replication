@@ -10,6 +10,7 @@ import connections.schema as conn_schema
 from connections.manager import ConnectionManager
 from threading import Thread
 import threading
+import time
 
 ACCOUNT_PAGE_SIZE = 4
 LOG_PAGE_SIZE = 4
@@ -268,6 +269,7 @@ class Server:
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
     def handle_req(self, req, was_primary: bool):
+        print(req.marshal())
         if req.type == "create":
             resp = self.handle_create(req, was_primary)
         elif req.type == "login":

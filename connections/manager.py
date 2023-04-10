@@ -122,6 +122,12 @@ class ConnectionManager:
             while self.alive:
                 # Accept the connection
                 conn, _ = self.external_socket.accept()
+                if self.is_primary:
+                    resp = Response("", True, "I am the primary")
+                    try:
+                        conn.send(resp.marshal().encode())
+                    finally:
+                        continue
                 if not self.is_primary:
                     resp = Response("", False, "I am not the primary")
                     try:

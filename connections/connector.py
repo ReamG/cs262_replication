@@ -35,7 +35,6 @@ class ClientConnector():
 
         while not self.iconn:
             self.primary_identity = LEXOGRAPHIC[self.ix]
-            print(self.primary_identity)
             try:
                 self.iconn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.iconn.connect((self.primary_identity.host_ip,
