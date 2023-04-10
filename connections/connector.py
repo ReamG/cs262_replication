@@ -27,8 +27,6 @@ class ClientConnector():
 
         # Loop through the servers in lexographic order and try to connect
         self.attempt_connection()
-        
-            
 
     def attempt_connection(self):
         """
@@ -42,6 +40,10 @@ class ClientConnector():
                 self.iconn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.iconn.connect((self.primary_identity.host_ip,
                                     self.primary_identity.client_port))
+                data = self.iconn.recv(2048)
+                resp = Response.unmarshal(data.decode())
+                if not resp.success:
+                    raise ValueError("Server is not primary")
             except Exception as e:
                 self.iconn = None
             self.ix = (self.ix + 1) % len(LEXOGRAPHIC)
@@ -59,7 +61,8 @@ class ClientConnector():
                 raise Exception("Server closed connection")
             response = Response.unmarshal(data.decode())
             if response == None:
-                print("YOU GOT HERE CONGRATS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                print(
+                    "YOU GOT HERE CONGRATS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                 raise Exception("Bad response")
             print(response)
             return response
