@@ -98,6 +98,7 @@ class CreateRequest(Request):
     def marshal(self):
         return f"{self.user_id}@@{self.type}"
 
+
 class FalloverRequest(Request):
     def __init__(self, user_id):
         super().__init__(user_id)
@@ -229,6 +230,8 @@ class Response:
             text = parts[6]
             chat = data_schema.Chat(author_id, recipient_id, text)
             return NotifResponse(user_id, success, error_message, chat)
+        elif resp_type == "ping":
+            return PingResponse()
         else:
             return Response(user_id, success, error_message)
 
@@ -291,3 +294,16 @@ class NotifResponse(Response):
 
     def marshal(self):
         return f"{self.user_id}@@{self.type}@@{self.success}@@{self.error_message}@@{self.chat.marshal()}"
+
+
+class PingResponse(Response):
+    """
+    A response that just lets the server know this client is alive
+    """
+
+    def __init__(self, user_id=""):
+        super().__init__(user_id, True, "")
+        self.type = "ping"
+
+    def marshal(self):
+        return f"{self.user_id}@@{self.type}@@{self.success}@@{self.error_message}"
