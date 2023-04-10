@@ -29,6 +29,9 @@ class Chat:
     def marshal(self):
         return f"{self.author_id}@@{self.recipient_id}@@{self.text}"
 
+    def pretty(self):
+        return f"------\nFrom: {self.author_id}\nText: {self.text}\n------"
+
     @staticmethod
     def unmarshal(message):
         parts = message.split("@@")

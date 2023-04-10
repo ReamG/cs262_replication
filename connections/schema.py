@@ -272,11 +272,12 @@ class LogsResponse(Response):
 
     @staticmethod
     def marshal_msgs(msgs):
-        return "##".join(msgs)
+        return "##".join([msg.marshal() for msg in msgs])
 
     @staticmethod
     def unmarshal_msgs(msgs):
-        return msgs.split("##")
+        arr = msgs.split("##")
+        return [el.unmarshal() for el in arr]
 
     def marshal(self):
         return f"{self.user_id}@@{self.type}@@{self.success}@@{self.error_message}@@{LogsResponse.marshal_msgs(self.msgs)}"
