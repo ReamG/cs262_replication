@@ -327,7 +327,6 @@ class ConnectionManager:
             except socket.timeout:
                 continue
             except Exception as e:
-                print(e.args)
                 conn.close()
                 with self.client_lock:
                     del self.client_sockets[name]

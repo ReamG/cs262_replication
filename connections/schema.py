@@ -222,8 +222,10 @@ class Response:
             accounts = ListResponse.unmarshal_accounts(accounts)
             return ListResponse(user_id, success, error_message, accounts)
         elif resp_type == "logs":
-            msgs = LogsResponse.unmarshal_msgs(parts[4])
-            print(msgs)
+            if len(parts) < 5 or parts[4] == "":
+                msgs = []
+            else:
+                msgs = LogsResponse.unmarshal_msgs(parts[4])
             return LogsResponse(user_id, success, error_message, msgs)
         elif resp_type == "notif":
             author_id = parts[4]
