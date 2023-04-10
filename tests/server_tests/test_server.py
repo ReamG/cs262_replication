@@ -41,19 +41,23 @@ class Server_dummy(server.Server):
         self.notif_sockets: Mapping[str, any] = {}  # Sockets for notif threads
         self.alive = True
 
+        #ACTIONS
+        self.rehydrate()
+
 class Test_server(unittest.TestCase):
     """Test class for our server code"""
 
-    def delete_log(self, server):
+    def delete_log(self):
         """Deletes log file"""
         try:
-            os.remove(server.get_logfile())
+            os.remove("logs/A_log.out")
         except:
             pass
 
     def test_handle_create(self):
 
         # Create test server
+        self.delete_log()
         server_a = Server_dummy(name='A')
 
         # Ensure server starts with no users
@@ -73,6 +77,7 @@ class Test_server(unittest.TestCase):
     def test_Login(self):
         
         # Create test server
+        self.delete_log()
         server_a = Server_dummy(name='A')
 
         
@@ -94,6 +99,7 @@ class Test_server(unittest.TestCase):
     def test_List(self):
 
         # Create test server
+        self.delete_log()
         server_a = Server_dummy(name='A')
 
         # Create test users
@@ -124,6 +130,7 @@ class Test_server(unittest.TestCase):
 
     def test_Delete(self):
         # Create test server
+        self.delete_log()
         server_a = Server_dummy(name='A')
 
         # Create test users
@@ -143,3 +150,53 @@ class Test_server(unittest.TestCase):
         ret = server_a.handle_delete(req, True)
         assert ret.success
         assert len(server_a.users) == 4
+    
+    def test_get_logfile(self):
+        """"
+        Create a test server and test that get_logfile returns the correct log file
+        """
+        # Create test server
+        self.delete_log()
+        server_a = Server_dummy(name='A')
+
+        # Test get_logfile
+        ret = server_a.get_logfile()
+        assert ret == "logs/A_log.out"
+    
+    def test_get_progress(self):
+        """
+        Create a test server and test that get_progress returns the correct progress
+        """
+        # Create test server
+        self.delete_log()
+        server_a = Server_dummy(name='A')
+
+        # Test get_progress
+        ret = server_a.get_progress()
+        assert ret == 0
+    
+    def test_rehydrate(self):
+        """
+        Create a test server and test that rehydrate returns the correct progress
+        """
+        # Create test server
+        self.delete_log()
+        server_a = Server_dummy(name='A')
+
+
+        # Create test users in log file
+        with open("logs/A_log.out", "w") as f:
+            f.write("ream@@create\n")
+            f.write("mark@@create\n")
+            f.write("achele@@create\n")
+            f.write("joe@@create\n")
+            f.write("bob@@create\n")
+        
+        # Test rehydrate
+        ret = server_a.rehydrate()
+        assert len(server_a.users) == 5
+
+        # Test rehydrate works on server initialization
+        server_a2 = Server_dummy(name='A')
+        assert len(server_a2.users) == 5
+        
