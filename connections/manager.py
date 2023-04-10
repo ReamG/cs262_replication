@@ -104,7 +104,6 @@ class ConnectionManager:
                 listens_completed += 1
             sock.close()
         except Exception as e:
-            print(e.args)
             sock.close()
 
     def listen_externally(self):
@@ -222,7 +221,6 @@ class ConnectionManager:
                 if not msg or len(msg) <= 0:
                     raise Exception("Connection closed")
                 req_obj = Request.unmarshal(msg)
-                print(f"Received {req_obj.type} from sibling")
                 self.internal_requests.put(req_obj)
         except Exception:
             conn.close()
@@ -328,7 +326,6 @@ class ConnectionManager:
             pass
         elif req.type in UNIMPORTANT_REQUEST_TYPES:
             return
-        print(f"sending {req.type} to", [s.name for s in self.living_siblings])
         for sibling in self.living_siblings:
             self.internal_sockets[sibling.name].send(req.marshal().encode())
 

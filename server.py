@@ -166,8 +166,6 @@ class Server:
                 resp = conn_schema.NotifResponse(user_id, True, "", msg)
                 conn.send(resp.marshal().encode())
         except Exception as e:
-            print(f"got {user_id}s notif thread dying")
-            print("notif thread died", e.args)
             # Error means the client has stopped listening on this thread
             # Clean up by deliting the socket from the map so that otehr clients
             # can connect using this username
@@ -247,8 +245,7 @@ class Server:
         is as simple as just getting the latest chat and removing it
         """
         if not request.user_id in self.msg_cache or self.msg_cache[request.user_id].empty():
-            print("THIS THING NOOOOOO")
-            return
+            return conn_schema.Response(user_id=request.user_id, success=False, error_message="Can't catchup queue")
         self.msg_cache[request.user_id].get()
         return conn_schema.Response(user_id=request.user_id, success=True, error_message="")
 
@@ -313,7 +310,6 @@ class Server:
                         self.msg_cache[req.recipient_id].put(chat)
                 self.conman.send_response(client_name, resp)
             if req.type == "fallover":
-                print(f"Server {self.name} is now dying")
                 self.kill()
                 break
 
@@ -321,8 +317,6 @@ class Server:
         self.alive = False
         self.conman.kill()
         with self.notif_lock:
-            print(
-                f"server {self.name} closing {len(self.notif_sockets)} sockets")
             for user_id in self.notif_sockets:
                 self.notif_sockets[user_id].close()
         if self.notif_listen_socket:
