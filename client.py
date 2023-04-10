@@ -173,7 +173,6 @@ class Client:
         utils.print_success("Success! Logged in as {}".format(username))
         self.user_id = username
 
-
     def handle_send(self):
         if not self.is_logged_in():
             utils.print_error("Error: You must be logged in to send a message")
@@ -227,7 +226,7 @@ class Client:
             len(resp.msgs), page_int, wildcard))
         for msg in resp.msgs:
             print(msg)
-    
+
     def handle_fallover(self):
         req = conn_schema.FalloverRequest(self.user_id)
         self.relogin(self.user_id)

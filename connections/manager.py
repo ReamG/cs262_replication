@@ -124,6 +124,10 @@ class ConnectionManager:
                 conn, _ = self.external_socket.accept()
                 if not self.is_primary:
                     resp = Response("", False, "I am not the primary")
+                    try:
+                        conn.send(resp.marshal().encode())
+                    finally:
+                        continue
                 name = conn.getpeername()
                 name = str(name[1])
                 with self.client_lock:
