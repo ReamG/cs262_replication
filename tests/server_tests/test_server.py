@@ -199,4 +199,50 @@ class Test_server(unittest.TestCase):
         # Test rehydrate works on server initialization
         server_a2 = Server_dummy(name='A')
         assert len(server_a2.users) == 5
+
+    def test_handle_send(self):
+        """
+        Create a test server and test that handle_send returns the correct progress
+        """
+        # Create test server
+        self.delete_log()
+        server_a = Server_dummy(name='A')
+
+        # Create test users
+        names = ["ream", "mark", "achele", "joe", "bob"]
+        for name in names:
+            req = connections.schema.CreateRequest(user_id=name)
+            server_a.handle_create(req, True)
+
+        # Test handle_send
+        req = connections.schema.SendRequest(user_id="ream", recipient_id="mark", text="hello")
+        ret = server_a.handle_send(req, True)
+        assert ret.success
+        assert len(server_a.users["mark"].msg_log) == 1
+    
+    def test_handle_logs(self):
+        """
+        Create a test server and test that handle_logs returns the correct progress
+        """
+        # Create test server
+        self.delete_log()
+        server_a = Server_dummy(name='A')
+
+        # Create test users
+        names = ["ream", "mark", "achele", "joe", "bob"]
+        for name in names:
+            req = connections.schema.CreateRequest(user_id=name)
+            server_a.handle_create(req, True)
+
+        # Test handle_logs
+        req = connections.schema.LogsRequest(user_id="ream", wildcard='', page=0)
+        ret = server_a.handle_logs(req, True)
+        assert len(ret.msgs) == 0
+
+        # Test handle_logs with messages
+        req = connections.schema.SendRequest(user_id="mark", recipient_id="ream", text="hello")
+        ret = server_a.handle_send(req, True)
+        req = connections.schema.LogsRequest(user_id="ream", wildcard='', page=0)
+        ret = server_a.handle_logs(req, True)
+        assert len(ret.msgs) == 1
         
