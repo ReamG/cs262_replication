@@ -57,9 +57,8 @@ def should_i_be_primary(name: str, living_siblings) -> bool:
     at any given time the machine with the earliest name will see itself
     as the primary machine. (correctly)
     """
-    if name == "A":
-        return True
-    elif name == "B":
-        return len(living_siblings) == 1
-    else:
-        return len(living_siblings) == 0
+    other_names = [sib.name for sib in living_siblings]
+    for other in other_names:
+        if other < name:
+            return False
+    return True

@@ -18,7 +18,12 @@
   - `manager.py` - A class used by each server. Manages connections between them, as well as listening/handling connections to clients.
   - `schema.py` - A class that defines our wire protocol as `Request`s and `Response`s.'
 
-- `tests` - Testing folder
+- `tests` - Testing folder. NOTE: since a lot of the functionality was carried over from a combination of the previous two projects, our tests focus heavily on the new functionality relating to persistence and fault tolerance.
+  - `conftest.py` - Setup, mocking
+  - `test_client.py` - Tests new (and old) client functionality
+  - `test_connector.py` - Tests the ClientConnector class
+  - `test_manager.py` - Tests the ConnectionManager class (servers)
+  - `test_server.py` - Tests the server.
 
 - `.` - Root folder
 

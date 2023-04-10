@@ -19,24 +19,28 @@ class ClientConnector():
     adapting when the primary goes down.
     """
 
-    def __init__(self):
+    def __init__(self, attempt_conn=None):
         self.iconn = None  # Interactive connection, for sending requests and getting responses
         self.sconn = None  # Subscription connection, for receiving notifs only
         self.primary_identity = None
         self.ix = 0
 
         # Loop through the servers in lexographic order and try to connect
-        self.attempt_connection()
+        if attempt_conn:
+            attempt_conn(self)
+        else:
+            self.attempt_connection()
 
-    def attempt_connection(self):
+    def attempt_connection(self, reset_sock=None):
         """
         Attempts to connect to the server at the given host and port.
+        reset_sock is for testing purposes only.
         """
 
         while not self.iconn:
             self.primary_identity = LEXOGRAPHIC[self.ix]
             try:
-                self.iconn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.iconn = reset_sock if reset_sock else socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.iconn.connect((self.primary_identity.host_ip,
                                     self.primary_identity.client_port))
                 data = self.iconn.recv(2048)

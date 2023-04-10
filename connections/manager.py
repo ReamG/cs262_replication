@@ -106,13 +106,16 @@ class ConnectionManager:
         except Exception as e:
             sock.close()
 
-    def listen_externally(self):
+    def listen_externally(self, sock=None):
         """
         Listens for incoming external connections. Adds a connection to the socket
         map once connected, and repeats indefinitely
         """
-        self.external_socket = socket.socket(
-            socket.AF_INET, socket.SOCK_STREAM)
+        if sock == None:
+            self.external_socket = socket.socket(
+                socket.AF_INET, socket.SOCK_STREAM)
+        else:
+            self.external_socket = sock
         self.external_socket.setsockopt(
             socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.external_socket.bind(
@@ -142,14 +145,17 @@ class ConnectionManager:
                     target=self.handle_client, args=(name,))
                 client_thread.start()
             self.external_socket.close()
-        except:
+        except Exception as e:
             self.external_socket.close()
 
-    def listen_health(self):
+    def listen_health(self, sock=None):
         """
         Listens for incoming health checks, responds with PingResponse
         """
-        self.health_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if sock == None:
+            self.health_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        else:
+            self.health_socket = sock
         self.health_socket.setsockopt(
             socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.health_socket.bind(
@@ -165,7 +171,7 @@ class ConnectionManager:
         except:
             self.health_socket.close()
 
-    def probe_health(self):
+    def probe_health(self, sock_arg=None):
         """
         Sends a health check to every sibling regularly
         """
@@ -173,7 +179,7 @@ class ConnectionManager:
         time.sleep(FREQUENCY)
         while self.alive:
             for sibling in self.living_siblings:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock = sock_arg if sock_arg else socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(FREQUENCY)
                 try:
                     sock.connect((sibling.host_ip, sibling.health_port))
@@ -192,9 +198,12 @@ class ConnectionManager:
                 # Self-trigger an internal request to free control
                 takeover_req = TakeoverRequest()
                 self.internal_requests.put(takeover_req)
+            if (sock_arg):
+                # For testing purposes
+                break
             time.sleep(FREQUENCY)
 
-    def connect_internally(self, name: str, progress: int):
+    def connect_internally(self, name: str, progress: int, sock=None):
         """
         Connects to the machine with the given name
         NOTE: Can/is expected to sometimes throw errors
@@ -206,7 +215,7 @@ class ConnectionManager:
             raise (errors.MachineNotFoundException("Invalid machine name"))
         identity = consts.MACHINE_MAP[name]
         # Setup the socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock = sock if sock else socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((identity.host_ip, identity.internal_port))
         # Send the name of this machine
         payload = f"{self.identity.name}@@{progress}"
@@ -318,6 +327,7 @@ class ConnectionManager:
             except socket.timeout:
                 continue
             except Exception as e:
+                print(e.args)
                 conn.close()
                 with self.client_lock:
                     del self.client_sockets[name]

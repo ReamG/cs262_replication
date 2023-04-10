@@ -79,3 +79,11 @@ def test_subscribe():
     resp = conn_schema.Response("subscribe", True, "")
     dummy_sock.add_fake_send(resp.marshal())
     assert not connector.subscribe("client_id")
+
+def test_kill():
+    """
+    Ensure that it closes the connection
+    """
+    connector = ClientConnector(DUMMY_ATTEMPT)
+    connector.kill()
+    assert connector.iconn.has_closed
