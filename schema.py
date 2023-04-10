@@ -26,17 +26,16 @@ class Chat:
         self.recipient_id = recipient_id
         self.text = text
 
-    def marshal(self):
-        return f"{self.author_id}@@{self.recipient_id}@@{self.text}"
+    def marshal(self, token="@@"):
+        return f"{self.author_id}{token}{self.recipient_id}{token}{self.text}"
 
     def pretty(self):
         return f"------\nFrom: {self.author_id}\nText: {self.text}\n------"
 
     @staticmethod
-    def unmarshal(message):
-        parts = message.split("@@")
+    def unmarshal(message, token="@@"):
+        parts = message.split(token)
         author_id = parts[0]
         recipient_id = parts[1]
         text = parts[2]
-        success = parts[3]
-        return Chat(author_id, recipient_id, text, success)
+        return Chat(author_id, recipient_id, text)

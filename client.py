@@ -1,3 +1,4 @@
+import pdb
 import utils
 from connections.connector import ClientConnector
 import connections.schema as conn_schema
@@ -221,7 +222,7 @@ class Client:
         utils.print_info("{} messages on page {} matching '{}'".format(
             len(resp.msgs), page_int, wildcard))
         for msg in resp.msgs:
-            print(msg)
+            print(msg.pretty())
 
     def handle_fallover(self):
         req = conn_schema.FalloverRequest(self.user_id)

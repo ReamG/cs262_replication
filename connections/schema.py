@@ -222,7 +222,8 @@ class Response:
             accounts = ListResponse.unmarshal_accounts(accounts)
             return ListResponse(user_id, success, error_message, accounts)
         elif resp_type == "logs":
-            msgs = parts[4]
+            msgs = LogsResponse.unmarshal_msgs(parts[4])
+            print(msgs)
             return LogsResponse(user_id, success, error_message, msgs)
         elif resp_type == "notif":
             author_id = parts[4]
@@ -272,12 +273,12 @@ class LogsResponse(Response):
 
     @staticmethod
     def marshal_msgs(msgs):
-        return "##".join([msg.marshal() for msg in msgs])
+        return "##".join([msg.marshal("||") for msg in msgs])
 
     @staticmethod
     def unmarshal_msgs(msgs):
         arr = msgs.split("##")
-        return [el.unmarshal() for el in arr]
+        return [data_schema.Chat.unmarshal(el, "||") for el in arr]
 
     def marshal(self):
         return f"{self.user_id}@@{self.type}@@{self.success}@@{self.error_message}@@{LogsResponse.marshal_msgs(self.msgs)}"

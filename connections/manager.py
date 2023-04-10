@@ -306,7 +306,6 @@ class ConnectionManager:
         while True:
             try:
                 msg = conn.recv(2048).decode()
-                print("msg:", msg)
                 if not msg or len(msg) <= 0:
                     raise Exception("Connection closed")
                 req_obj = Request.unmarshal(msg)
