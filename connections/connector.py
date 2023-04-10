@@ -43,6 +43,7 @@ class ClientConnector():
                 resp = Response.unmarshal(data.decode())
                 if not resp.success:
                     raise ValueError("Server is not primary")
+                    self.iconn = None
             except Exception as e:
                 self.iconn = None
             self.ix = (self.ix + 1) % len(LEXOGRAPHIC)
@@ -52,6 +53,7 @@ class ClientConnector():
         Sends a request to the server.
         NOTE: Hangs, does not return until a response has been sent
         """
+        print(self.primary_identity.name)
         try:
             self.iconn.send(req.marshal().encode())
             data = self.iconn.recv(2048)

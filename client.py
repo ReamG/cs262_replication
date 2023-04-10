@@ -66,6 +66,7 @@ class Client:
         utils.print_success("Success! Account created")
 
     def handle_login(self):
+        pdb.set_trace()
         """
         Fails if the user is already logged in, they submit an empty username,
         or if the login fails in expected way.
