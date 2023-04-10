@@ -7,7 +7,7 @@ except:
     pass
 from threading import Lock
 from typing import List, Mapping
-sys.path.insert(0, "../..")
+sys.path.insert(0, "..")
 import server
 import connections.schema 
 import schema
