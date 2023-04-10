@@ -23,24 +23,28 @@ class ClientConnector():
         self.iconn = None  # Interactive connection, for sending requests and getting responses
         self.sconn = None  # Subscription connection, for receiving notifs only
         self.primary_identity = None
+        self.ix = 0
 
         # Loop through the servers in lexographic order and try to connect
-        ix = 0
-        while not self.iconn:
-            self.primary_identity = LEXOGRAPHIC[ix]
-            self.attempt_connection()
-            ix = (ix + 1) % len(LEXOGRAPHIC)
+        self.attempt_connection()
+        
+            
 
     def attempt_connection(self):
         """
         Attempts to connect to the server at the given host and port.
         """
-        try:
-            self.iconn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.iconn.connect((self.primary_identity.host_ip,
-                                self.primary_identity.client_port))
-        except Exception as e:
-            self.iconn = None
+
+        while not self.iconn:
+            self.primary_identity = LEXOGRAPHIC[self.ix]
+            print(self.primary_identity)
+            try:
+                self.iconn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.iconn.connect((self.primary_identity.host_ip,
+                                    self.primary_identity.client_port))
+            except Exception as e:
+                self.iconn = None
+            self.ix = (self.ix + 1) % len(LEXOGRAPHIC)
 
     def send_request(self, req: Request):
         """
@@ -50,12 +54,20 @@ class ClientConnector():
         try:
             self.iconn.send(req.marshal().encode())
             data = self.iconn.recv(2048)
+            print(data)
             if not data:
                 raise Exception("Server closed connection")
             response = Response.unmarshal(data.decode())
+            if response == None:
+                print("YOU GOT HERE CONGRATS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                raise Exception("Bad response")
+            print(response)
             return response
         except Exception as e:
-            return None
+            self.iconn.close()
+            self.iconn = None
+            self.attempt_connection()
+            return self.send_request(req)
 
     def watch_chats(self, conn):
         """
@@ -101,5 +113,5 @@ class ClientConnector():
     def kill(self):
         if self.iconn:
             self.iconn.close()
-        if self.wconn:
-            self.wconn.close()
+        if self.sconn:
+            self.sconn.close()
