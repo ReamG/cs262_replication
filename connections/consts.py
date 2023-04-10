@@ -14,7 +14,7 @@ MACHINE_A = Machine(
 
 MACHINE_B = Machine(
     name="B",
-    host_ip="localhost",
+    host_ip="10.250.138.58",
     internal_port=50061,
     client_port=50062,
     health_port=50063,
